@@ -4,61 +4,26 @@
 <title>HTML Rasterizer</title>
 </head>
 <body>
-<canvas id="canvas" width="600" height="600" style="border: 1px grey solid">
+<canvas id="canvas" width="450" height="450" style="border: 1px grey solid">
   <script>
   
     //------------------------------------------------------------------------//
-    //                                 Enums                                  //
-    //------------------------------------------------------------------------//
-    const color = {
-      RED : [255, 0, 0],
-      GREEN : [0, 255, 0],
-      BLUE : [0, 0, 255],
-      YELLOW : [255, 255, 0],
-      PURPLE : [255, 0, 255],
-      CYAN : [0, 255, 255]
-    }
-    const lightType = {
-      AMBIENT : "ambient",
-      POINT : "point",
-      DIRECTIONAL : "directional"
-    }
-    //------------------------------------------------------------------------//
     //                                Classes                                 //
     //------------------------------------------------------------------------//
-    // 2D Point
-    class Point {
-      constructor(x,y,h) {
-        this.x=x;
-        this.y=y;
-        this.h=h;
-      }
-    }
-    // 3D Vertex
     class Vertex {
-      constructor(x,y,z) {
-        this.x=x;
-        this.y=y;
-        this.z=z;
-      }
-      toString() {
-        return "<" + this.x + ", " + this.y + ", " + this.z + ">" ;
-      }
-    }
-    // 3D Vertex with homogeneous coordinate
-    class Vertex4 {
-      constructor(x,y,z,w) {
+      constructor(x,y,z=0,w=1) {
         this.x=x;
         this.y=y;
         this.z=z;
         this.w=w;
       }
+      toString() {
+        return "<" + this.x + ", " + this.y + ", " + this.z + ", " + this.w ;
+      }
       toArray() {
-        let a = [this.x,this.y,this.z,this.w];
-        return a;
+        return [this.x,this.y,this.z,this.w];
       }
     }
-    // 4x4 matrix
     class Mat {
       constructor(values) {
         this.values = values;
@@ -75,10 +40,12 @@
       }
     }
     class Triangle {
-      constructor(indices,normals, color) {
+      constructor(indices, normals, UVs, color, texture) {
         this.indices = indices;
         this.normals = normals;
+        this.UVs = UVs;
         this.color = color;
+        this.texture=texture;
       }
     }
     class Scene {
@@ -97,12 +64,13 @@
       }
     }
     class Instance {
-      constructor(model,position,rotation,scaling, reflectivity) {
+      constructor(model,position,rotation,scaling,reflectivity, children) {
         this.model=model;
         this.position = position;
         this.rotation = rotation;
         this.scaling = scaling;
         this.reflectivity = reflectivity;
+        this.children = children;
       }
       makeTransformMatrix() {
         let translationMat = makeTranslationMatrix(this.position);
@@ -110,6 +78,11 @@
         let scaleMat = makeScaleMatrix(this.scaling);
         let mat = multiplyMM(rotationMat,scaleMat);
         return multiplyMM(translationMat,mat);
+      }
+      translate (vector) {
+        this.position.x += vector.x;
+        this.position.y += vector.y;
+        this.position.z += vector.z;
       }
     }
     class Camera {
@@ -144,7 +117,66 @@
         this.position = position;
         this.direction = direction;
       }
+      translate (vector) {
+        this.position.x += vector.x;
+        this.position.y += vector.y;
+        this.position.z += vector.z;
+      }
     }
+    class Texture{
+      constructor(source) {
+        this.image = new Image();
+
+        var texture = this;
+        this.image.addEventListener('load', function() {
+          texture.iw = texture.image.width;
+          texture.ih = texture.image.height;
+
+          texture.canvas = document.createElement("canvas");
+          texture.canvas.width = texture.iw;
+          texture.canvas.height = texture.ih;
+          var ctx = texture.canvas.getContext("2d");
+          ctx.drawImage(texture.image, 0, 0, texture.iw, texture.ih);
+          texture.pixel_data = ctx.getImageData(0, 0, texture.iw, texture.ih);
+        }, false);
+
+        this.image.src = source;
+      }
+      getTexel(u, v) {
+        var iu = parseInt(u*this.iw);
+        var iv = parseInt(v*this.ih);
+
+        var offset = (iv*this.iw*4 + iu*4);
+
+        return [
+          this.pixel_data.data[offset + 0],
+          this.pixel_data.data[offset + 1],
+          this.pixel_data.data[offset + 2]
+        ];
+      }
+    }
+    
+    //------------------------------------------------------------------------//
+    //                                 Enums                                  //
+    //------------------------------------------------------------------------//
+    const color = {
+      RED : [255, 0, 0],
+      GREEN : [0, 255, 0],
+      BLUE : [0, 0, 255],
+      YELLOW : [255, 255, 0],
+      PURPLE : [255, 0, 255],
+      CYAN : [0, 255, 255],
+      INDIGO : [75,0,130],
+      WHITE : [255,255,255],
+      GREY : [80,80,80]
+    }
+    const lightType = {
+      AMBIENT : "ambient",
+      POINT : "point",
+      DIRECTIONAL : "directional"
+    }
+   
+
     //------------------------------------------------------------------------//
     //                            Canvas Data                                 //
     //------------------------------------------------------------------------//
@@ -184,7 +216,7 @@
       canvas.context.putImageData(canvas.buffer, 0, 0);
     }
     function clearBuffers(canvas) {
-      canvas.context.fillStyle = "#519693";
+      canvas.context.fillStyle = "#202020";
       canvas.context.fillRect(0, 0, canvas.width, canvas.height);
       canvas.buffer = canvas.context.getImageData(0, 0, canvas.width, canvas.height);
       depthBuffer = new Array(canvas.width * canvas.height);
@@ -192,18 +224,15 @@
     //------------------------------------------------------------------------//
     //                     Linear algebra and helpers                         //
     //------------------------------------------------------------------------//
-    // Add two vectors
-    function addVectors(vec1, vec2) {
-      return new Vertex(vec1.x + vec2.x, vec1.y + vec2.y, vec1.z + vec2.z);
+    function add(v1, v2) {
+      return new Vertex(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z);
     }
-    // Subtract two vectors
-    function subtractVectors(vec1, vec2) {
-      vec2 = multiplyScalar(-1, vec2);
-      return new Vertex(vec1.x + vec2.x, vec1.y + vec2.y, vec1.z + vec2.z);
+    function subtract(v1, v2) {
+      return new Vertex(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z);
     }
     // Multiply a vector by a scalar
-    function multiplyScalar(s,vec) {
-      return new Vertex(s*vec.x, s*vec.y, s*vec.z);
+    function multiply(s,v) {
+      return new Vertex(s*v.x, s*v.y, s*v.z);
     }
     // Dot product between two vectors
     function dotProduct(vec1, vec2) {
@@ -217,23 +246,23 @@
       return new Vertex(i, -j, k);
     }
     // Distance between two points.
-    function distancePoints(p1,p2) {
+    function distanceVertexs(p1,p2) {
       let d = Math.pow(p2.x-p1.x,2) + Math.pow(p2.y-p1.y,2)
-      if (typeof p1.z != "undefined" && typeof p2.z != "undefined") {
+      if (p1.z && p2.z) {
         d += Math.pow(p2.z-p1.z,2)
       }
       return Math.sqrt(d);
     }
     
     // Mid point between two points.
-    function midPoint(p1,p2) {
+    function midVertex(p1,p2) {
       let x = parseInt((p1.x+p2.x)/2);
       let y = parseInt((p1.y+p2.y)/2);
-      if (typeof p1.z != "undefined" && typeof p2.z != "undefined") {
+      if (p1.z && p2.z) {
         let z = parseInt((p1.z+p2.z)/2);
         return new Vertex(x,y,z);
       } else {
-        return new Point(x,y);
+        return new Vertex(x,y);
       }
     }
 
@@ -241,9 +270,9 @@
     function transpose(mat) {
       let result = [];
       let values = mat.values;
-      for (i=0;i<values.length;i++) {
+      for (let i=0;i<values.length;i++) {
         result[i]=[];
-        for(j=0;j<values[0].length;j++) {
+        for (let j=0;j<values[0].length;j++) {
           result[i][j]=values[j][i];
         }
       }
@@ -257,13 +286,13 @@
       }
 
       let result=[];
-      for (i=0;i<v.length;i++) {
+      for (let i=0;i<v.length;i++) {
         result.push(0);
       }
       let values = mat.values;
 
-      for (i=0; i<values.length; i++) {
-        for (j=0; j<values[i].length; j++) {
+      for (let i=0; i<values.length; i++) {
+        for (let j=0; j<values[i].length; j++) {
           result[i] += values[i][j] * v[j];
         }
       }
@@ -277,16 +306,16 @@
         return null;
       }
       let result = [];
-      for (i=0;i<mat1Data.length;i++) {
+      for (let i=0;i<mat1Data.length;i++) {
         result[i]=[];
-        for(j=0;j<mat2Data[0].length;j++) {
+        for (let j=0;j<mat2Data[0].length;j++) {
           result[i][j]=0;
         }
       }
-      for (i=0; i<mat1Data.length; i++) {
-        for (j=0; j<mat2Data[i].length; j++){
+      for (let i=0; i<mat1Data.length; i++) {
+        for (let j=0; j<mat2Data[i].length; j++){
           let dot=0;
-          for (k=0; k<mat1Data[i].length; k++){
+          for (let k=0; k<mat1Data[i].length; k++){
             dot+= mat1Data[i][k] * mat2Data[k][j];
           }
           result[i][j] = dot;
@@ -297,9 +326,6 @@
     function arrayToVertex(array) {
       return new Vertex(array[0], array[1], array[2]);
     }
-    function vertexToVertex4(vertex){
-      return new Vertex4(vertex.x,vertex.y,vertex.z,1);
-    }
     function interpolate(x0,y0,x1,y1) {
       if (x0==x1){
         return [ y0 ];
@@ -307,7 +333,7 @@
       var values = [];
       var a = (y1-y0) / (x1-x0);
       var y = y0;
-      for (i = x0; i <= x1; i++) {
+      for (let i = x0; i <= x1; i++) {
         values.push(y);
         y=y+a;
       }
@@ -317,28 +343,32 @@
       var y01 = interpolate(x0,y0,x1,y1);
       var y12 = interpolate(x1,y1,x2,y2);
       var y02 = interpolate(x0,y0,x2,y2);
-      
-
       y01.pop();
       var y012 = y01.concat(y12);
       return [y02, y012];
     }
     // Get the normal of a triangle
     function getTriangleNormal(v0,v1,v2){
-      let v01 = subtractVectors(v1, v0);
-      let v02 = subtractVectors(v2, v0);
+      let v01 = subtract(v1, v0);
+      let v02 = subtract(v2, v0);
       return crossProduct(v01,v02);
     }
     // Find the centroid of a triangle
     function getCentroid(v0,v1,v2) {
-      return multiplyScalar(1/3, addVectors(addVectors(v0, v1), v2));
+      return multiply(1/3, add(add(v0, v1), v2));
     }
     // Find the point where the line defined by a and b intersect the plane
     function planeIntersection(a,b, plane) {
-      let bMinusA = subtractVectors(a, b);
+      let bMinusA = subtract(a, b);
       let num = - plane.distance - dotProduct(plane.normal, a);
       let denum = dotProduct(plane.normal, bMinusA);
-      return addVectors(a, multiplyScalar(num/denum, bMinusA));
+      let t = num/denum;
+      let q =  add(a, multiply(t, bMinusA));
+      return [q, t];
+    }
+    // Compute the value of an attribute at t
+    function computeAttribute(alphaA,alphaB,t) {
+      return add(alphaA, multiply(t, subtract(alphaA, alphaB)));
     }
     function sortIndices(indices, vertices) {
       var i0 = 0;
@@ -431,15 +461,21 @@
       return new Mat(m);
     }
     function makeRotationMatrix(orientation) {
-      let yRotationMat = transpose(makeYRotationMatrix(orientation.y));
-      let xRotationMat = transpose(makeXRotationMatrix(orientation.x));
-      let zRotationMat = transpose(makeZRotationMatrix(orientation.z));
+      let yRotationMat = makeYRotationMatrix(orientation.y);
+      let xRotationMat = makeXRotationMatrix(orientation.x);
+      let zRotationMat = makeZRotationMatrix(orientation.z);
       return multiplyMM(xRotationMat, multiplyMM(yRotationMat, zRotationMat));
     }
-
-    function makeCameraMatrix(camera){
-      let rotationMat = makeRotationMatrix(camera.orientation);
-      let translationMat = makeTranslationMatrix(multiplyScalar(-1,camera.position));
+    function makeTransformMatrix(position, rotation, scaling) {
+        let translationMat = makeTranslationMatrix(position);
+        let rotationMat = makeRotationMatrix(rotation);
+        let scaleMat = makeScaleMatrix(scaling);
+        let mat = multiplyMM(rotationMat,scaleMat);
+        return multiplyMM(translationMat,mat);
+      }
+    function makeCameraMatrix(camera) {
+      let rotationMat = transpose(makeRotationMatrix(camera.orientation));
+      let translationMat = makeTranslationMatrix(multiply(-1,camera.position));
       return multiplyMM(rotationMat,translationMat);
     }
     
@@ -453,7 +489,7 @@
       var y = vertices[0];
       var d = 0;
       for (let v of vertices) {
-        let d2 = distancePoints(x,v);
+        let d2 = distanceVertexs(x,v);
         if (d2 > d) {
           d = d2;
           y = v;
@@ -461,17 +497,17 @@
       }
       let z = vertices[0];
       for (let v of vertices) {
-        let d2 = distancePoints(y,v);
+        let d2 = distanceVertexs(y,v);
         if (d2 > d) {
           d = d2;
           z = v;
         }
       }
-      let mid = midPoint(z,y);
+      let mid = midVertex(z,y);
       let radius = d/2;
       let expandRadius = false;
       for (let v of vertices) {
-        let d2 = distancePoints(mid,v);
+        let d2 = distanceVertexs(mid,v);
         if (d2>radius) {
           radius = d2;
         }
@@ -480,7 +516,7 @@
     }
     // Checks if the bounding sphere is inside the view frustum defined by the camera.
     function checkForClipping(sphere, camera) {
-      for (p of camera.clippingPlanes) {
+      for (let p of camera.clippingPlanes) {
         let d = dotProduct(p.normal, sphere.position) + p.distance;
         if (d < -sphere.radius) {
           return true;
@@ -493,11 +529,11 @@
     function clipModel(model, plane) {
       var newTriangles = [];
       var newVertices = model.vertices;
-      for (triangle of model.triangles) {
+      for (let triangle of model.triangles) {
         let iIn = [];
         let iOut = [];
         let indices = triangle.indices;
-        for (i = 0; i<indices.length; i++) {
+        for (let i = 0; i<indices.length; i++) {
           let v = newVertices[indices[i]];
           if (dotProduct(plane.normal, v) + plane.distance > 0) {
             iIn.push(i);
@@ -510,36 +546,54 @@
         } else if (iIn.length == 3) {
           newTriangles.push(triangle);
         } else if (iIn.length == 1) {
+          // Compute plane intersections between A and C and B and C
+          let A = newVertices[indices[iIn[0]]];
+          let B = newVertices[indices[iOut[0]]];
+          let C = newVertices[indices[iOut[1]]];
+          let [q1, t1] = planeIntersection(A,B, plane);
+          let [q2, t2] = planeIntersection(A,C, plane);
+          // Compute new indices
           let newIndices = [];
-          let q1 = planeIntersection(newVertices[indices[iIn[0]]],newVertices[indices[iOut[0]]], plane);
-          let q2 = planeIntersection(newVertices[indices[iIn[0]]],newVertices[indices[iOut[1]]], plane);
           newIndices[iIn[0]] = newVertices.length;
           newVertices.push(q1);
           newIndices[iOut[0]] = newVertices.length;
           newVertices.push(q2);
           newIndices[iOut[1]] = indices[iIn[0]];
-          newTriangles.push(new Triangle(newIndices, triangle.normals, triangle.color));
+          // Compute new UVs
+          let newUVs = [];
+          newUVs[iIn[0]] = triangle.UVs[iIn[0]];
+          newUVs[iOut[0]] = computeAttribute(triangle.UVs[iIn[0]],triangle.UVs[iOut[0]], t1);
+          newUVs[iOut[1]] = computeAttribute(triangle.UVs[iIn[0]],triangle.UVs[iOut[1]], t2);
+          newTriangles.push(new Triangle(newIndices, triangle.normals,newUVs, triangle.color, triangle.texture));
         } else if (iIn.length == 2) {
-          
+          let [q1, t1] = planeIntersection(newVertices[indices[iIn[0]]],newVertices[indices[iOut[0]]], plane);
+          // Compute new indices for 1st triangle
           let newIndices1 = [];
           let newIndices2 = [];
-          let q1 = planeIntersection(newVertices[indices[iIn[0]]],newVertices[indices[iOut[0]]], plane);
-          
           newIndices1[iOut[0]] = newVertices.length;
           newIndices2[iOut[0]] = newVertices.length;
           newVertices.push(q1);
           newIndices1[iIn[0]] = indices[iIn[0]];
           newIndices1[iIn[1]] = indices[iIn[1]];
+           // Compute new UVs for 1st triangle
+          let newUVs1 = [];
+          newUVs1[iIn[0]] = triangle.UVs[iIn[0]];
+          newUVs1[iIn[1]] = triangle.UVs[iIn[1]];
+          newUVs1[iOut[0]] = computeAttribute(triangle.UVs[iIn[0]],triangle.UVs[iOut[0]], t1);
+          newTriangles.push(new Triangle(newIndices1, triangle.normals, newUVs1, triangle.color, triangle.texture));
           
-          newTriangles.push(new Triangle(newIndices1,  triangle.normals, triangle.color));
-          
-          let q2 = planeIntersection(newVertices[indices[iIn[1]]],newVertices[indices[iOut[0]]], plane); 
+          let [q2, t2] = planeIntersection(newVertices[indices[iIn[1]]],newVertices[indices[iOut[0]]], plane); 
 
+          // Compute new indices for 2nd triangle
           newIndices2[iIn[1]] = newVertices.length;
           newVertices.push(q2);
           newIndices2[iIn[0]] = indices[iIn[1]];
-         
-          newTriangles.push(new Triangle(newIndices2,  triangle.normals, triangle.color));
+          // Compute new UVs for 2nd triangle
+          let newUVs2 = [];
+          newUVs2[iIn[0]] = triangle.UVs[iIn[1]];
+          newUVs2[iIn[1]] = computeAttribute(triangle.UVs[iIn[1]],triangle.UVs[iOut[0]], t2);
+          newUVs2[iOut[0]] = computeAttribute(triangle.UVs[iIn[0]],triangle.UVs[iOut[0]], t2);
+          newTriangles.push(new Triangle(newIndices2, triangle.normals, newUVs2, triangle.color, triangle.texture));
           
         }
       }
@@ -577,7 +631,7 @@
       // Triangle center
       var center = getCentroid(p0,p1,p2);
       // Direction vector from triangle to origin
-      var vto = multiplyScalar(-1,center);
+      var vto = multiply(-1,center);
       return dotProduct(vto,normal) < 0;
     }
     //----------------------------------------------------------  --------------//
@@ -585,8 +639,11 @@
     //------------------------------------------------------------------------//
 
     function computeLighting(vertex, normal,  scene, specular) {
+      if (specular == -1) {
+        return 1;
+      }
       var intensity = 0;
-      for (i = 0 ; i<scene.lights.length; i++) {
+      for (let i = 0 ; i<scene.lights.length; i++) {
         
         light = scene.lights[i];
         
@@ -597,21 +654,23 @@
         } else {
           var vl;
           if (light.type == lightType.POINT) {
-            
-            vl = subtractVectors(light.mat, vertexToVertex4(vertex));
+            vl = subtract(light.mat, vertex);
           } else if (light.type == lightType.DIRECTIONAL){
-            
             vl = light.vl;
           }
           // Diffuse light
           let nDotL = dotProduct(normal, vl);
-          if (nDotL>0) {
-            intensity += light.intensity * nDotL / (vectorLength(normal) * vectorLength(vl));
+          if (nDotL>0) { 
+            if (light.type == lightType.POINT) {
+              intensity += 1/vectorLength(vl) * (light.intensity * nDotL / (vectorLength(normal) * vectorLength(vl)));
+            } else {
+              intensity += (light.intensity * nDotL / (vectorLength(normal) * vectorLength(vl)));
+            }
           }
           //Specular light
-          if (specular != -1) {
-            let vecR = subtractVectors(multiplyScalar(2.0*dotProduct(normal, vl), normal), vl);
-            let view = subtractVectors(camera.position, vertex);
+          if (specular != 0) {
+            let vecR = subtract(multiply(2.0*dotProduct(normal, vl), normal), vl);
+            let view = subtract(camera.position, vertex);
             let rDotV = dotProduct(vecR, view);
             if (rDotV > 0) {
               intensity += light.intensity * Math.pow(rDotV / (vectorLength(vecR) * vectorLength(view)), specular); 
@@ -636,7 +695,7 @@
             p1 = p;
           }
           var yArray = interpolate(p0.x, p0.y, p1.x, p1.y);
-          for (i = p0.x; i < p1.x; i++) {
+          for (let i = p0.x; i < p1.x; i++) {
             putPixel(i, yArray[i-p0.x],color);
           }
         } else {
@@ -646,7 +705,7 @@
             p1 = p;
           }
           var xArray = interpolate(p0.y, p0.x, p1.y, p1.x);
-          for (i = p0.y; i < p1.y; i++) {
+          for (let i = p0.y; i < p1.y; i++) {
             putPixel(xArray[i-p0.y], i, color);
           }
         }
@@ -657,10 +716,10 @@
       drawLine(p2, p0, color);
     }
     function viewportToCanvas(x,y, canvas) {
-      return new Point(parseInt(x*canvas.width/viewportWidth), parseInt(y*canvas.height/viewportHeight),1);
+      return new Vertex(parseInt(x*canvas.width/viewportWidth), parseInt(y*canvas.height/viewportHeight));
     }
     function canvasToViewport(x,y, canvas) {
-      return new Point(x*viewportWidth/canvas.width, y*viewportHeight/canvas.height,1);
+      return new Vertex(x*viewportWidth/canvas.width, y*viewportHeight/canvas.height);
     }
     function projectVertex(v, canvas) {
       return viewportToCanvas(v.x*zProjectionPlane/v.z,v.y*zProjectionPlane/v.z, canvas);
@@ -684,16 +743,19 @@
       var p2 = projected[triangle.indices[i2]];
       // Vertex normals 
       var transform = multiplyMM(transpose(makeRotationMatrix(scene.camera.orientation)), makeRotationMatrix(instance.rotation));
-      let n0 = arrayToVertex(multiplyMV(transform, vertexToVertex4(triangle.normals[i0])));
-      var n1 = arrayToVertex(multiplyMV(transform, vertexToVertex4(triangle.normals[i1])));
-      var n2 = arrayToVertex(multiplyMV(transform, vertexToVertex4(triangle.normals[i2])));
+      let n0 = arrayToVertex(multiplyMV(transform, triangle.normals[i0]));
+      var n1 = arrayToVertex(multiplyMV(transform, triangle.normals[i1]));
+      var n2 = arrayToVertex(multiplyMV(transform, triangle.normals[i2]));
       //Interpolated normal vectors for Phong shading
       var [nx02, nx012] = interpolateEdges(p0.y, n0.x, p1.y, n1.x, p2.y, n2.x);
       var [ny02, ny012] = interpolateEdges(p0.y, n0.y, p1.y, n1.y, p2.y, n2.y);
       var [nz02, nz012] = interpolateEdges(p0.y, n0.z, p1.y, n1.z, p2.y, n2.z);
-      // Points of the triangle edges
+      // Vertexs of the triangle edges
       var [x02, x012]   = interpolateEdges(p0.y,p0.x,p1.y,p1.x,p2.y,p2.x);
       var [iz02, iz012] = interpolateEdges(p0.y, 1.0/t0.z, p1.y, 1.0/t1.z, p2.y, 1.0/t2.z);
+      // UV coordinates for textures
+      var [uz02, uz012] = interpolateEdges(p0.y, triangle.UVs[i0].x / t0.z,p1.y, triangle.UVs[i1].x / t1.z,p2.y, triangle.UVs[i2].x / t2.z);
+      var [vz02, vz012] = interpolateEdges(p0.y, triangle.UVs[i0].y / t0.z,p1.y, triangle.UVs[i1].y / t1.z,p2.y, triangle.UVs[i2].y / t2.z);
       // Determine left and right sides
       var m = parseInt(x012.length/2);
       if (x02[m] < x012[m]) {
@@ -702,174 +764,235 @@
         var [nxLeft, nxRight] = [nx02, nx012];
         var [nyLeft, nyRight] = [ny02, ny012];
         var [nzLeft, nzRight] = [nz02, nz012];
+        var [uzLeft, uzRight] = [uz02, uz012];
+        var [vzLeft, vzRight] = [vz02, vz012];
       } else {
         var [xLeft, xRight] = [x012, x02];
         var [izLeft, izRight] = [iz012, iz02];
         var [nxLeft, nxRight] = [nx012, nx02];
         var [nyLeft, nyRight] = [ny012, ny02];
         var [nzLeft, nzRight] = [nz012, nz02];
+        var [uzLeft, uzRight] = [uz012, uz02];
+        var [vzLeft, vzRight] = [vz012, vz02];
       }
 
-      for (light of scene.lights) {
+      for (let light of scene.lights) {
         if (light.type == lightType.DIRECTIONAL) {
           let mat =  makeRotationMatrix(scene.camera.orientation);
-          light.vl = arrayToVertex(multiplyMV(mat, vertexToVertex4(light.direction)));
+          light.vl = arrayToVertex(multiplyMV(mat, light.direction));
         } else if(light.type == lightType.POINT) {
           let cameraMat = makeCameraMatrix(camera);
-          light.mat= arrayToVertex(multiplyMV(cameraMat, vertexToVertex4(light.position)));
+          light.mat= arrayToVertex(multiplyMV(cameraMat, light.position));
         }
       }
       // Draw the segments
-      for (y = p0.y, l1=p2.y; y <= l1; y++) {
-        let xL = parseInt(xLeft[y-p0.y]);
-        let xR = parseInt(xRight[y-p0.y]);
-        let izSegment = interpolate(xL, izLeft[y - p0.y], xR, izRight[y - p0.y]);
-        let nxSegment = interpolate(xL, nxLeft[y - p0.y], xR, nxRight[y - p0.y]);
-        let nySegment = interpolate(xL, nyLeft[y - p0.y], xR, nyRight[y - p0.y]);
-        let nzSegment = interpolate(xL, nzLeft[y - p0.y], xR, nzRight[y - p0.y]);
-        for (x = xL, l2 = xR; x <= l2; x++) {
+      for (let y = p0.y, l1=p2.y; y <= l1; y++) {
+        let y0 = p0.y;
+        let xL = parseInt(xLeft[y-y0]);
+        let xR = parseInt(xRight[y-y0]);
+        let izSegment = interpolate(xL, izLeft[y - y0], xR, izRight[y - y0]);
+        let nxSegment = interpolate(xL, nxLeft[y - y0], xR, nxRight[y - y0]);
+        let nySegment = interpolate(xL, nyLeft[y - y0], xR, nyRight[y - y0]);
+        let nzSegment = interpolate(xL, nzLeft[y - y0], xR, nzRight[y - y0]);
+        let uzSegment, vzSegment;
+        
+        if (triangle.texture) {
+          uzSegment = interpolate(xL, uzLeft[y - y0], xR, uzRight[y - y0]);
+          vzSegment = interpolate(xL, vzLeft[y - y0], xR, vzRight[y - y0]);
+        }  
+        for (let x = xL, l2 = xR; x <= l2; x++) {
           let iz = izSegment[x - xL];
           if (updateDepthBuffer(x, y, iz, canvas)) {  
-            var vertex = unProjectVertex(x, y, 1.0/iz, canvas);
-            var normal = new Vertex(nxSegment[x - xL], nySegment[x - xL], nzSegment[x - xL]);
-            var intensity = computeLighting(vertex, normal, scene, instance.reflectivity);
-            putPixel(x,y,multiplyColor(intensity, triangle.color), canvas);
+            let vertex = unProjectVertex(x, y, 1.0/iz, canvas);
+            let normal = new Vertex(nxSegment[x - xL], nySegment[x - xL], nzSegment[x - xL]);
+            let intensity = computeLighting(vertex, normal, scene, instance.reflectivity);
+            let color;
+            if (triangle.texture) {
+              color = triangle.texture.getTexel(uzSegment[x - xL] / iz, vzSegment[x - xL] / iz);
+            } else {
+              color = triangle.color;
+            }
+            putPixel(x,y,multiplyColor(intensity, color), canvas);
           }
         }
       }
     }
-    function renderInstance(instance, scene, canvas) {
+    function renderInstance(instance, scene, canvas, parentMatrix) {
       var model = instance.model;
       var camera  = scene.camera;
       // Get the model matrix
       var modelMatrix = instance.makeTransformMatrix();
-      // Get the camera matrix
-      var cameraMatrix = makeCameraMatrix(camera);
-      var transform = multiplyMM(cameraMatrix, modelMatrix);
-      var transformed = [];
+      // Get the view matrix
+      var viewMatrix = makeCameraMatrix(camera);
+      // Getting model-view matrix
+      var MVMatrix= multiplyMM(viewMatrix, modelMatrix);
+      var transformedVertices = [];
 
+      // Getting the vertices in view space
       for (let i = 0; i<model.vertices.length; i++) {
-        let vecArray = multiplyMV(transform, vertexToVertex4(model.vertices[i]));
-        transformed[i] = new Vertex(vecArray[0],vecArray[1],vecArray[2]);
+        let vecArray = multiplyMV(MVMatrix, model.vertices[i]);
+        transformedVertices[i] = new Vertex(vecArray[0],vecArray[1],vecArray[2]);
       }
-      var boundingSphere = getBoundingSphere(transformed);
-
-      // Clip an entire model
- 
+      // Check the model for clipping
+      var boundingSphere = getBoundingSphere(transformedVertices);
       if (checkForClipping(boundingSphere, camera)) {
         return null;
       }
+      
+      var transformedModel = new Model(model.name, transformedVertices, model.triangles);
  
-      var transformedModel = new Model(model.name, transformed, model.triangles);
- 
-      // Clip inidivudal triangles
-      for (plane of camera.clippingPlanes) {
+      // Check the individual model triangles for clipping
+      for (let plane of camera.clippingPlanes) {
         transformedModel = clipModel(transformedModel, plane);
       }
-      
-      let projected = [];
-      let newTransformed = transformedModel.vertices;
-      for (v of newTransformed) {
-        projected.push(projectVertex(v, canvas));
+      // Projecting the vertices in world space
+      var projectedVertices = [];
+      transformedVertices = transformedModel.vertices;
+      for (let v of transformedVertices) {
+        projectedVertices.push(projectVertex(v, canvas));
       }
-   
-      for (t of transformedModel.triangles) {
-        if (!checkForCulling(transformed, t.indices)) {
-          renderTriangle(t, transformed,projected, instance, scene, canvas);
+      // Rendering the triangles
+      for (let t of transformedModel.triangles) {
+        if (!checkForCulling(transformedVertices, t.indices)) {
+          renderTriangle(t, transformedVertices,projectedVertices, instance, scene, canvas);
+        }
+      }
+      // Rendering any children instances
+      if (instance.children) {
+        for (let i of instance.children) {
+          renderInstance(i,scene,canvas, modelMatrix);
         }
       }
     }
     function renderScene(scene, canvas) {
-      for (i of scene.instances) {
-        
+      for (let i of scene.instances) {
         renderInstance(i,scene, canvas);
       }
     }
     //------------------------------------------------------------------------//
     //                            Event Handling                              //
     //------------------------------------------------------------------------//
-    var cameraTranslate= new Vertex(0,0,0);
+    var playerTranslate= new Vertex(0,0,0);
     var speed = 0.1;
 
-    function triggerMoveCamera(event) {
+    function triggerMovePlayer(event) {
       if(event.keyCode == 37) {
-        cameraTranslate.x = -speed;
-      }
-      else if(event.keyCode == 38) {
-        cameraTranslate.z = speed;
+        playerTranslate.x = -speed;
       }
       else if(event.keyCode == 39) {
-        cameraTranslate.x = speed;
-      }
-      else if(event.keyCode == 40) {
-        cameraTranslate.z = -speed;
+        playerTranslate.x = speed;
       }
     }
-    function releaseMoveCamera(event) {
+    function releaseMovePlayer(event) {
       if(event.keyCode == 37) {
-        cameraTranslate.x = 0;
-      }
-      else if(event.keyCode == 38) {
-        cameraTranslate.z = 0;
+        playerTranslate.x = 0;
       }
       else if(event.keyCode == 39) {
-        cameraTranslate.x = 0;
-      }
-      else if(event.keyCode == 40) {
-        cameraTranslate.z = 0;
+        playerTranslate.x = 0;
       }
     }
 
-    document.addEventListener('keydown', triggerMoveCamera, true);
-    document.addEventListener('keyup', releaseMoveCamera, true);
+    document.addEventListener('keydown', triggerMovePlayer, true);
+    document.addEventListener('keyup', releaseMovePlayer, true);
 
     //------------------------------------------------------------------------//
     //                                 Main                                   //
     //------------------------------------------------------------------------//
-    var cube_vertices = [
-      new Vertex(1,1,1),   // 0
-      new Vertex(-1,1,1),  // 1
-      new Vertex(-1,-1,1), // 2
-      new Vertex(1,-1,1),  // 3
-      new Vertex(1,1,-1),  // 4
-      new Vertex(-1,1,-1), // 5
-      new Vertex(-1,-1,-1),// 6
-      new Vertex(1,-1,-1)  // 7
-    ];
-    // Indices, normals, color
-    var cube_triangles = [
-      new Triangle([0,1,2], [new Vertex(0, 0, 1), new Vertex(0, 0, 1), new Vertex(0, 0, 1)], color.RED),
-      new Triangle([0,2,3], [new Vertex(0, 0, 1), new Vertex(0, 0, 1), new Vertex(0, 0, 1)], color.RED),
-      new Triangle([4,0,3], [new Vertex(1, 0, 0), new Vertex(1, 0, 0), new Vertex(1, 0, 0)], color.GREEN),
-      new Triangle([4,3,7], [new Vertex(1, 0, 0), new Vertex(1, 0, 0), new Vertex(1, 0, 0)], color.GREEN),
-      new Triangle([5,4,7], [new Vertex(0, 0, -1), new Vertex(0, 0, -1), new Vertex(0, 0, -1)], color.BLUE),
-      new Triangle([5,7,6], [new Vertex(0, 0, -1), new Vertex(0, 0, -1), new Vertex(0, 0, -1)], color.BLUE),
-      new Triangle([1,5,6], [new Vertex(-1, 0, 0), new Vertex(-1, 0, 0), new Vertex(-1, 0, 0)], color.YELLOW),
-      new Triangle([1,6,2], [new Vertex(-1, 0, 0), new Vertex(-1, 0, 0), new Vertex(-1, 0, 0)], color.YELLOW),
-      new Triangle([4,5,1], [new Vertex(0, 1, 0), new Vertex(0, 1, 0), new Vertex(0, 1, 0)], color.PURPLE),
-      new Triangle([4,1,0], [new Vertex(0, 1, 0), new Vertex(0, 1, 0), new Vertex(0, 1, 0)], color.PURPLE),
-      new Triangle([2,6,7], [new Vertex(0, -1, 0), new Vertex(0, -1, 0), new Vertex(0, -1, 0)], color.CYAN),
-      new Triangle([2,7,3], [new Vertex(0, -1, 0), new Vertex(0, -1, 0), new Vertex(0, -1, 0)], color.CYAN)
-    ];
-    var plane_vertices = [
-      new Vertex(1,0,1),   // 0
-      new Vertex(-1,0,1),  // 1
-      new Vertex(1,0,-1), // 2
-      new Vertex(-1,0,-1),  // 3
-    ]
-    var plane_triangles = [
-      new Triangle([2,3,1], [new Vertex(0, 1, 0), new Vertex(0, 1, 0), new Vertex(0, 1, 0)], color.RED),
-      new Triangle([2,1,0], [new Vertex(0, 1, 0), new Vertex(0, 1, 0), new Vertex(0, 1, 0)], color.RED)
-    ]
-    var cube_model = new Model("Cube", cube_vertices, cube_triangles);
-    var plane_model = new Model("Plane", plane_vertices, plane_triangles);
+    function createCubeModel(color, texture) {
+
+      var vertices = [
+        new Vertex(1,1,1),   // 0
+        new Vertex(-1,1,1),  // 1
+        new Vertex(-1,-1,1), // 2
+        new Vertex(1,-1,1),  // 3
+        new Vertex(1,1,-1),  // 4
+        new Vertex(-1,1,-1), // 5
+        new Vertex(-1,-1,-1),// 6
+        new Vertex(1,-1,-1)  // 7
+      ];
+      var normals = [
+        [new Vertex(0, 0, 1), new Vertex(0, 0, 1), new Vertex(0, 0, 1)],
+        [new Vertex(0, 0, 1), new Vertex(0, 0, 1), new Vertex(0, 0, 1)],
+        [new Vertex(1, 0, 0), new Vertex(1, 0, 0), new Vertex(1, 0, 0)],
+        [new Vertex(1, 0, 0), new Vertex(1, 0, 0), new Vertex(1, 0, 0)],
+        [new Vertex(0, 0, -1), new Vertex(0, 0, -1), new Vertex(0, 0, -1)],
+        [new Vertex(0, 0, -1), new Vertex(0, 0, -1), new Vertex(0, 0, -1)],
+        [new Vertex(-1, 0, 0), new Vertex(-1, 0, 0), new Vertex(-1, 0, 0)],
+        [new Vertex(-1, 0, 0), new Vertex(-1, 0, 0), new Vertex(-1, 0, 0)],
+        [new Vertex(0, 1, 0), new Vertex(0, 1, 0), new Vertex(0, 1, 0)],
+        [new Vertex(0, 1, 0), new Vertex(0, 1, 0), new Vertex(0, 1, 0)],
+        [new Vertex(0, -1, 0), new Vertex(0, -1, 0), new Vertex(0, -1, 0)],
+        [new Vertex(0, -1, 0), new Vertex(0, -1, 0), new Vertex(0, -1, 0)],
+      ];
+      var UVs = [
+        [new Vertex(0, 0), new Vertex(1, 0), new Vertex(1, 1)],
+        [new Vertex(0, 0), new Vertex(1, 1), new Vertex(0, 1)],
+        [new Vertex(0, 0), new Vertex(1, 0), new Vertex(1, 1)],
+        [new Vertex(0, 0), new Vertex(1, 1), new Vertex(0, 1)],
+        [new Vertex(0, 0), new Vertex(1, 0), new Vertex(1, 1)],
+        [new Vertex(0, 0), new Vertex(1, 1), new Vertex(0, 1)],
+        [new Vertex(0, 0), new Vertex(1, 0), new Vertex(1, 1)],
+        [new Vertex(0, 0), new Vertex(1, 1), new Vertex(0, 1)],
+        [new Vertex(0, 0), new Vertex(1, 0), new Vertex(1, 1)],
+        [new Vertex(0, 0), new Vertex(1, 1), new Vertex(0, 1)], 
+        [new Vertex(0, 0), new Vertex(1, 0), new Vertex(1, 1)], 
+        [new Vertex(0, 0), new Vertex(1, 1), new Vertex(0, 1)]
+      ];
+      var triangles = [
+        new Triangle([0,1,2], normals[0], UVs[0], color, texture),
+        new Triangle([0,2,3], normals[1], UVs[1], color, texture),
+        new Triangle([4,0,3], normals[2], UVs[2], color, texture),
+        new Triangle([4,3,7], normals[3], UVs[3], color, texture),
+        new Triangle([5,4,7], normals[4], UVs[4], color, texture),
+        new Triangle([5,7,6], normals[5], UVs[5], color, texture),
+        new Triangle([1,5,6], normals[6], UVs[6], color, texture),
+        new Triangle([1,6,2], normals[7], UVs[7], color, texture),
+        new Triangle([4,5,1], normals[8], UVs[8], color, texture),
+        new Triangle([4,1,0], normals[9], UVs[9], color, texture),
+        new Triangle([2,6,7], normals[10], UVs[10], color, texture),
+        new Triangle([2,7,3], normals[11], UVs[11], color, texture)
+      ];
+      return new Model("Cube", vertices, triangles);
+    }
+    function createPlaneModel(color, texture) {
+      var vertices = [
+        new Vertex(1,0,1),   // 0
+        new Vertex(-1,0,1),  // 1
+        new Vertex(1,0,-1), // 2
+        new Vertex(-1,0,-1),  // 3
+      ]
+      var normals = [
+        [new Vertex(0, 1, 0), new Vertex(0, 1, 0), new Vertex(0, 1, 0)],
+        [new Vertex(0, 1, 0), new Vertex(0, 1, 0), new Vertex(0, 1, 0)],
+      ];
+      var UVs = [
+        [new Vertex(0, 0), new Vertex(1, 0), new Vertex(1, 1)],
+        [new Vertex(0, 0), new Vertex(1, 1), new Vertex(0, 1)], 
+      ]
+      var triangles = [
+        new Triangle([2,3,1], normals[0], UVs[0], color, texture),
+        new Triangle([2,1,0], normals[1], UVs[1], color, texture)
+      ]
+      return new Model("Plane", vertices, triangles);
+    }
+    var woodTexture = new Texture("crate-texture.jpg");
+    var greyCube = createCubeModel(color.GREY,);
+    var whiteCube = createCubeModel(color.WHITE);
+    var greyPlane = createPlaneModel(color.GREY, woodTexture);
     var mainInstances = [
-      new Instance(cube_model, new Vertex(-1.5, 0, 7),new Vertex(0, 0, 0) ,new Vertex(0.75, 0.75, 0.75), 1000),
-      new Instance(cube_model, new Vertex(1.25, 2.5, 7.5),new Vertex(0, 180, 0), new Vertex(0.75, 0.75, 0.75), -1),
+      new Instance(whiteCube, new Vertex(0, 0.5, 3),new Vertex(0, 180, 0), new Vertex(0.2,0.2,0.2), -1),
+      new Instance(whiteCube, new Vertex(1, 0.5, 8),new Vertex(0, 180, 0), new Vertex(0.5, 0.2, 0.2), 1000),
+      new Instance(whiteCube, new Vertex(0, 0.5, 9),new Vertex(0, 180, 0), new Vertex(0.5, 0.2, 0.2), 1000),
+      new Instance(whiteCube, new Vertex(-1, 0.5, 10),new Vertex(0, 180, 0), new Vertex(0.5, 0.2, 0.2), 1000),
+      new Instance(greyPlane, new Vertex(0, 0, 9.5),new Vertex(0, 0, 0), new Vertex(1.75, 0, 8), 1000),
+
     ];
     var staticInstances = [
-      new Instance(plane_model, new Vertex(0, -3, 7.5),new Vertex(0, 0, 0), new Vertex(10, 0, 10), -1),
-    ]
+      //new Instance(greyPlane, new Vertex(0, 0.01, 7.5),new Vertex(0, 0, 0), new Vertex(1.75, 0, 10), 0),
+      new Instance(greyCube, new Vertex(2, 0.5, 7.5),new Vertex(0, 180, 0), new Vertex(0.25, 0.5,10), 1000),
+      new Instance(greyCube, new Vertex(-2, 0.5, 7.5),new Vertex(0, 180, 0), new Vertex(0.25, 0.5, 10), 1000),
+      
+    ];
     // #TODO Compute the planes normals for any fovs.
     var clippingPlanes = [
       new Plane(new Vertex(0, 0, 1), -zProjectionPlane), // Near
@@ -879,19 +1002,20 @@
       new Plane(new Vertex(0, Math.sqrt(2),Math.sqrt(2)), 0),
     ];
     // Position, rotation, clipping planes
-    var camera = new Camera(new Vertex(0, 0, 0), new Vertex(0, 0, 0), clippingPlanes);
+    var camera = new Camera(new Vertex(0, 3, 0), new Vertex(25, 0, 0), clippingPlanes);
     // type, intensity, position, direction
     var lights = [
-      new Light(lightType.AMBIENT, 0.2),
-      new Light(lightType.DIRECTIONAL, 0.6, null, new Vertex(3,3,-3)),
-      new Light(lightType.POINT, 0.4, new Vertex(0, -2, 8))
+      new Light(lightType.AMBIENT, 0.6),
+      new Light(lightType.POINT, 0.2, new Vertex(0, 0.5, 3.2)),
+      //new Light(lightType.DIRECTIONAL, 0.8, null, new Vertex(4,2,-3)),
+      
     ];
     var mainScene = new Scene(mainInstances , camera, lights);
     var staticScene = new Scene(staticInstances , camera, lights);
     // Limiting frame rate to 60 fps
     var stop = false;
     var frameCount = 0;
-    var fps =  40;
+    var fps =  30;
     var fpsInterval, startTime, now, then, elapsed;
 
     fpsInterval = 1000 / fps;
@@ -905,16 +1029,19 @@
       if (elapsed > fpsInterval) {
         then = now - (elapsed % fpsInterval);
         clearBuffers(mainCanvas);
-        
-        mainScene.instances[0].rotation.x += 2;
-        mainScene.instances[0].rotation.z += 2;
-        mainScene.camera.translate(cameraTranslate);
+        let vt = new Vertex(0,0,-0.15);
+        for (var i=1; i<4; i++) {
+          mainScene.instances[i].translate(vt);
+        }
+        let x = mainScene.instances[0].position.x + playerTranslate.x;
+        if (x > -1.45 && x< 1.45) {
+          mainScene.instances[0].translate(playerTranslate);
+          mainScene.lights[1].translate(playerTranslate);
+        }
         mainCanvas.context.drawImage(offScreenCanvas.element, 0, 0);  
         mainCanvas.buffer = mainCanvas.context.getImageData(0, 0, canvas.width, canvas.height);
         renderScene(mainScene,mainCanvas);
         updateCanvas(mainCanvas);
-        
-        
       }
     }
     
@@ -923,7 +1050,9 @@
       updateCanvas(offScreenCanvas);
       gameLoop();
     }
-    render();
+    
+    // Ugly hack - wait for texture to load.
+    setTimeout(function() { render(); }, 50);
   </script>
 </canvas>
 </html>
