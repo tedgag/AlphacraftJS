@@ -4,8 +4,29 @@
 <title>HTML Rasterizer</title>
 </head>
 <body>
-<canvas id="canvas" width="450" height="450" style="border: 1px grey solid">
+<canvas id="canvas" width="350" height="350" style="border: 1px grey solid">
   <script>
+    //------------------------------------------------------------------------//
+    //                                 Enums                                  //
+    //------------------------------------------------------------------------//
+    const colors = {
+      RED : [255, 0, 0],
+      GREEN : [0, 255, 0],
+      BLUE : [0, 0, 255],
+      YELLOW : [255, 255, 0],
+      PURPLE : [255, 0, 255],
+      CYAN : [0, 255, 255],
+      INDIGO : [75,0,130],
+      WHITE : [255,255,255],
+      GREY : [80,80,80]
+    }
+    const lightType = {
+      AMBIENT : "ambient",
+      POINT : "point",
+      DIRECTIONAL : "directional"
+    }
+   
+
   
     //------------------------------------------------------------------------//
     //                                Classes                                 //
@@ -22,6 +43,14 @@
       }
       toArray() {
         return [this.x,this.y,this.z,this.w];
+      }
+      toRGBA() {
+        return [
+          this.x * 255,
+          this.y * 255,
+          this.z * 255,
+          this.w * 255
+        ]
       }
     }
     class Mat {
@@ -60,42 +89,6 @@
         this.name=name;
         this.vertices=vertices;
         this.triangles=triangles;
-        if (boundingSphere) {
-          this.boundingSphere = boundingSphere;
-        } else {
-          this.boundingSphere = this.getBoundingSphere();
-        }
-        
-      }
-      getBoundingSphere() {
-        var x = this.vertices[0];
-        var y = this.vertices[0];
-        var d = 0;
-        for (let v of this.vertices) {
-          let d2 = distance(x,v);
-          if (d2 > d) {
-            d = d2;
-            y = v;
-          }
-        }
-        let z = this.vertices[0];
-        for (let v of this.vertices) {
-          let d2 = distance(y,v);
-          if (d2 > d) {
-            d = d2;
-            z = v;
-          }
-        }
-        let mid = midVertex(z,y);
-        let radius = d/2;
-        let expandRadius = false;
-        for (let v of this.vertices) {
-          let d2 = distance(mid,v);
-          if (d2>radius) {
-            radius = d2;
-          }
-        }
-        return new BoundingSphere(mid,radius);
       }
     }
     class Instance {
@@ -106,6 +99,7 @@
         this.scaling = scaling;
         this.reflectivity = reflectivity;
         this.children = children;
+        this.boundingSphere = new BoundingSphere(this.position, 0);
       }
       makeTransformMatrix() {
         let translationMat = makeTranslationMatrix(this.position);
@@ -118,37 +112,52 @@
         this.position.x += vector.x;
         this.position.y += vector.y;
         this.position.z += vector.z;
-        if (this.children) {
-          for (let i=0; i<this.children.length; i++) {
-            this.children[i].translate(vector);
-          }
-        }
       }
       rotate (vector) {
         this.rotation.x += vector.x;
         this.rotation.y += vector.y;
         this.rotation.z += vector.z;
-        if (this.children) {
-          for (let i=0; i<this.children.length; i++) {
-            this.children[i].rotate(vector);
+      }
+      getBoundingSphere(vertices) {
+   
+        var highestX = vertices[0].x;
+        var lowestX = vertices[0].x;
+        var highestY = vertices[0].y;
+        var lowestY = vertices[0].y;
+        var highestZ = vertices[0].z;
+        var lowestZ = vertices[0].z;
+        for (let v in vertices) {
+          if (v.x > highestX) {
+            highestX = v.x;
+          }
+          if (v.x < lowestX) {
+            lowestX = v.x;
+          }
+          if (v.y > highestY) {
+            highestY = v.y;
+          }
+          if (v.y < lowestY) {
+            lowestY = v.y;
+          }
+          if (v.z > highestZ) {
+            highestZ = v.z;
+          }
+          if (v.z < lowestZ) {
+            lowestZ = v.z;
           }
         }
-      }
-      getTransformedBoundingSphere(){
-        var sphere = this.model.boundingSphere;
-        var transformedPosition = add(sphere.position, this.position);
-        var biggestScaling = 0;
-        if (this.scaling.x > biggestScaling) {
-          biggestScaling = this.scaling.x;
+
+        var mid = new Vertex((highestX+lowestX)/2,(highestY+lowestY)/2,(highestZ+lowestZ)/2);
+        
+        var radius=0;
+        for (let v of vertices) {
+          let d = distance(mid,v);
+          if(d>radius) {
+            radius=d;
+          }
         }
-        if (this.scaling.y > biggestScaling) {
-          biggestScaling = this.scaling.y;
-        }
-        if (this.scaling.z > biggestScaling) {
-          biggestScaling = this.scaling.z;
-        }
-        var transformedRadius = sphere.radius * biggestScaling;
-        return new BoundingSphere(transformedPosition, transformedRadius);
+        this.boundingSphere = new BoundingSphere(mid,radius);
+        return this.boundingSphere;
       }
     }
     class Camera {
@@ -177,11 +186,12 @@
       }
     }
     class Light {
-      constructor(type, intensity, position, direction) {
+      constructor(type, intensity, position, direction, color = vertexFromRGBA(colors.WHITE)) {
         this.type = type;
         this.intensity = intensity;
         this.position = position;
         this.direction = direction;
+        this.color = color;
       }
       translate (vector) {
         this.position.x += vector.x;
@@ -214,11 +224,11 @@
 
         var offset = (iv*this.iw*4 + iu*4);
 
-        return [
-          this.pixel_data.data[offset + 0],
-          this.pixel_data.data[offset + 1],
-          this.pixel_data.data[offset + 2]
-        ];
+        return new Vertex(
+          this.pixel_data.data[offset + 0]/255,
+          this.pixel_data.data[offset + 1]/255,
+          this.pixel_data.data[offset + 2]/255
+        );
       }
     }
     class GameEntity {
@@ -230,32 +240,14 @@
       }
     }
     
-    //------------------------------------------------------------------------//
-    //                                 Enums                                  //
-    //------------------------------------------------------------------------//
-    const color = {
-      RED : [255, 0, 0],
-      GREEN : [0, 255, 0],
-      BLUE : [0, 0, 255],
-      YELLOW : [255, 255, 0],
-      PURPLE : [255, 0, 255],
-      CYAN : [0, 255, 255],
-      INDIGO : [75,0,130],
-      WHITE : [255,255,255],
-      GREY : [80,80,80]
-    }
-    const lightType = {
-      AMBIENT : "ambient",
-      POINT : "point",
-      DIRECTIONAL : "directional"
-    }
-   
-
+    
     //------------------------------------------------------------------------//
     //                            Canvas Data                                 //
     //------------------------------------------------------------------------//
     // Main screen canvas
     var main = document.getElementById("canvas");
+    main.style.width = "500px";
+    main.style.height = "500px";
     var mainCanvas = new Canvas(main );
 
     // First Offscreen canvas
@@ -288,9 +280,9 @@
         return;
       }
       var offset = 4*x + canvas.pitch*y;
-      canvas.buffer.data[offset++] = color[0];
-      canvas.buffer.data[offset++] = color[1];
-      canvas.buffer.data[offset++] = color[2];
+      canvas.buffer.data[offset++] = parseInt(color[0]);
+      canvas.buffer.data[offset++] = parseInt(color[1]);
+      canvas.buffer.data[offset++] = parseInt(color[2]);
       canvas.buffer.data[offset++] = 255;
     }
     function updateCanvas(canvas) {
@@ -478,11 +470,15 @@
     }
     function clamp(value) {
       if (value < 0) { return 0; }
-      if (value > 255) { return 255; }
+      if (value > 1) { return 1; }
       return value;
     }
-    function multiplyColor(s, color) {
-      return [clamp(s*color[0]), clamp(s*color[1]), clamp(s*color[2])];
+    function multiplyColors(color1, color2) {
+      let r = clamp(color1.x * color2.x);
+      let g = clamp(color1.y * color2.y);
+      let b = clamp(color1.z * color2.z);
+      let a = clamp(color1.w * color2.w);
+      return new Vertex(r,g,b,a);
     }
     function toRad(angle) {
       return angle*Math.PI/180;
@@ -493,6 +489,13 @@
     function toUV(vertex) {
       let v = multiply(0.5, add(vertex, new Vertex(1,0,1)));
       return new Vertex(v.x,v.z);
+    }
+    function vertexFromRGBA(color) {
+      if (colors.length == 4) {
+        return new Vertex(color[0]/255, color[1]/255, color[2]/255, color[3]/255);
+      } else {
+        return new Vertex(color[0]/255, color[1]/255, color[2]/255, 1);
+      }
     }
     //------------------------------------------------------------------------//
     //                        Transformation Matrices                         //
@@ -656,7 +659,7 @@
         }
       }
       
-      return new Model(model.name, newVertices, newTriangles, model.boundingSphere);
+      return new Model(model.name, newVertices, newTriangles);
     }
     //------------------------------------------------------------------------//
     //                        Hidden surfaces removal                         //
@@ -696,19 +699,21 @@
     //                         Lighting and shadows                           //
     //------------------------------------------------------------------------//
 
-    function computeLighting(vertex, normal,  scene, specular) {
-      if (specular == -1) {
-        return 1;
+    function computeLighting(vertex, normal,  scene, reflectivity) {
+      if (reflectivity == -1) {
+        return new Vertex(1,1,1);
       }
-      var intensity = 0;
+      //var totalLight = 0;
+      var totalLight = new Vertex(0,0,0);
+
       for (let i = 0 ; i<scene.lights.length; i++) {
         
         light = scene.lights[i];
+        let lightColor = light.color;
         
         if (light.type == lightType.AMBIENT) {
-    
-          intensity += light.intensity;
-          
+          let ambient = light.intensity;
+          totalLight = add(totalLight, multiply(ambient, lightColor));
         } else {
           var vl;
           if (light.type == lightType.POINT) {
@@ -718,28 +723,30 @@
           }
           // Diffuse light
           let nDotL = dotProduct(normal, vl);
-          if (nDotL>0) { 
+          var diffuse = 0;
+          if (nDotL>0.2) { 
             if (light.type == lightType.POINT) {
-              intensity += 1/vectorLength(vl) * (light.intensity * nDotL / (vectorLength(normal) * vectorLength(vl)));
+              diffuse= 1/vectorLength(vl) * (light.intensity * nDotL / (vectorLength(normal) * vectorLength(vl)));
             } else {
-              intensity += (light.intensity * nDotL / (vectorLength(normal) * vectorLength(vl)));
+              diffuse = light.intensity * nDotL / (vectorLength(normal) * vectorLength(vl));
             }
           }
           //Specular light
-          if (specular != 0) {
+          var specular = 0;
+          if (reflectivity != 0) {
             let vecR = subtract(multiply(2.0*dotProduct(normal, vl), normal), vl);
             let view = subtract(camera.position, vertex);
             let rDotV = dotProduct(vecR, view);
             if (rDotV > 0) {
-              intensity += light.intensity * Math.pow(rDotV / (vectorLength(vecR) * vectorLength(view)), specular); 
+              specular = light.intensity * Math.pow(rDotV / (vectorLength(vecR) * vectorLength(view)), reflectivity); 
             }
           }
+          totalLight = add(totalLight, multiply(specular+diffuse, lightColor));
           
         }
       }
-      return intensity;
+      return totalLight;
     }
-
     //------------------------------------------------------------------------//
     //                              Rendering                                 //
     //------------------------------------------------------------------------//
@@ -789,6 +796,7 @@
       return new Vertex(p.x, p.y, z);
     }
     function renderTriangle(triangle, transformed, projected, instance, scene, canvas) {
+    
       // Sorted indices
       var [i0,i1,i2] = sortIndices(triangle.indices, projected);
       // Transformed vertices
@@ -801,7 +809,7 @@
       var p2 = projected[triangle.indices[i2]];
       // Vertex normals 
       var transform = multiplyMM(transpose(makeRotationMatrix(scene.camera.orientation)), makeRotationMatrix(instance.rotation));
-      let n0 = arrayToVertex(multiplyMV(transform, triangle.normals[i0]));
+      var n0 = arrayToVertex(multiplyMV(transform, triangle.normals[i0]));
       var n1 = arrayToVertex(multiplyMV(transform, triangle.normals[i1]));
       var n2 = arrayToVertex(multiplyMV(transform, triangle.normals[i2]));
       //Interpolated normal vectors for Phong shading
@@ -812,8 +820,11 @@
       var [x02, x012]   = interpolateEdges(p0.y,p0.x,p1.y,p1.x,p2.y,p2.x);
       var [iz02, iz012] = interpolateEdges(p0.y, 1.0/t0.z, p1.y, 1.0/t1.z, p2.y, 1.0/t2.z);
       // UV coordinates for textures
-      var [uz02, uz012] = interpolateEdges(p0.y, triangle.UVs[i0].x / t0.z,p1.y, triangle.UVs[i1].x / t1.z,p2.y, triangle.UVs[i2].x / t2.z);
-      var [vz02, vz012] = interpolateEdges(p0.y, triangle.UVs[i0].y / t0.z,p1.y, triangle.UVs[i1].y / t1.z,p2.y, triangle.UVs[i2].y / t2.z);
+      var hasTexture = typeof triangle.texture === 'undefined' ? false : true; 
+      if (hasTexture ) {
+        var [uz02, uz012] = interpolateEdges(p0.y, triangle.UVs[i0].x / t0.z,p1.y, triangle.UVs[i1].x / t1.z,p2.y, triangle.UVs[i2].x / t2.z);
+        var [vz02, vz012] = interpolateEdges(p0.y, triangle.UVs[i0].y / t0.z,p1.y, triangle.UVs[i1].y / t1.z,p2.y, triangle.UVs[i2].y / t2.z);
+      }
       // Determine left and right sides
       var m = parseInt(x012.length/2);
       if (x02[m] < x012[m]) {
@@ -822,27 +833,22 @@
         var [nxLeft, nxRight] = [nx02, nx012];
         var [nyLeft, nyRight] = [ny02, ny012];
         var [nzLeft, nzRight] = [nz02, nz012];
-        var [uzLeft, uzRight] = [uz02, uz012];
-        var [vzLeft, vzRight] = [vz02, vz012];
+        if (hasTexture) {
+          var [uzLeft, uzRight] = [uz02, uz012];
+          var [vzLeft, vzRight] = [vz02, vz012];
+        }
       } else {
         var [xLeft, xRight] = [x012, x02];
         var [izLeft, izRight] = [iz012, iz02];
         var [nxLeft, nxRight] = [nx012, nx02];
         var [nyLeft, nyRight] = [ny012, ny02];
         var [nzLeft, nzRight] = [nz012, nz02];
-        var [uzLeft, uzRight] = [uz012, uz02];
-        var [vzLeft, vzRight] = [vz012, vz02];
-      }
-
-      for (let light of scene.lights) {
-        if (light.type == lightType.DIRECTIONAL) {
-          let mat =  makeRotationMatrix(scene.camera.orientation);
-          light.vl = arrayToVertex(multiplyMV(mat, light.direction));
-        } else if(light.type == lightType.POINT) {
-          let cameraMat = makeCameraMatrix(camera);
-          light.mat= arrayToVertex(multiplyMV(cameraMat, light.position));
+        if (hasTexture) {
+          var [uzLeft, uzRight] = [uz012, uz02];
+          var [vzLeft, vzRight] = [vz012, vz02];
         }
       }
+
       // Draw the segments
       for (let y = p0.y, l1=p2.y; y <= l1; y++) {
         let y0 = p0.y;
@@ -853,8 +859,7 @@
         let nySegment = interpolate(xL, nyLeft[y - y0], xR, nyRight[y - y0]);
         let nzSegment = interpolate(xL, nzLeft[y - y0], xR, nzRight[y - y0]);
         let uzSegment, vzSegment;
-        
-        if (triangle.texture) {
+        if (hasTexture) {
           uzSegment = interpolate(xL, uzLeft[y - y0], xR, uzRight[y - y0]);
           vzSegment = interpolate(xL, vzLeft[y - y0], xR, vzRight[y - y0]);
         }  
@@ -863,14 +868,16 @@
           if (updateDepthBuffer(x, y, iz, canvas)) {  
             let vertex = unProjectVertex(x, y, 1.0/iz, canvas);
             let normal = new Vertex(nxSegment[x - xL], nySegment[x - xL], nzSegment[x - xL]);
-            let intensity = computeLighting(vertex, normal, scene, instance.reflectivity);
+            let totalLight = computeLighting(vertex, normal, scene, instance.reflectivity);
             let color;
-            if (triangle.texture) {
+            if (hasTexture) {
               color = triangle.texture.getTexel(uzSegment[x - xL] / iz, vzSegment[x - xL] / iz);
             } else {
               color = triangle.color;
             }
-            putPixel(x,y,multiplyColor(intensity, color), canvas);
+            
+            let shadedColor = multiplyColors(totalLight, color);
+            putPixel(x,y,shadedColor.toRGBA(), canvas);
           }
         }
       }
@@ -880,24 +887,27 @@
       var camera  = scene.camera;
       // Get the model matrix
       var modelMatrix = instance.makeTransformMatrix();
-      // Get the view matrix
-      var viewMatrix = makeCameraMatrix(camera);
-      // Getting model-view matrix
-      var MVMatrix= multiplyMM(viewMatrix, modelMatrix);
+      if (parentMatrix) {
+        modelMatrix =  multiplyMM(parentMatrix, modelMatrix);
+      }
       var transformedVertices = [];
-
-      // Getting the vertices in view space
+      // Get the vertices in world space
       for (let i = 0; i<model.vertices.length; i++) {
-        let vecArray = multiplyMV(MVMatrix, model.vertices[i]);
-        transformedVertices[i] = new Vertex(vecArray[0],vecArray[1],vecArray[2]);
+        transformedVertices[i] = arrayToVertex(multiplyMV(modelMatrix, model.vertices[i]));
       }
       // Check the model for clipping
-      var boundingSphere = instance.getTransformedBoundingSphere();
+      var boundingSphere = instance.getBoundingSphere(transformedVertices);
       if (checkForClipping(boundingSphere, camera)) {
         return null;
       }
-      
-      var transformedModel = new Model(model.name, transformedVertices, model.triangles, boundingSphere);
+      // Get the view matrix
+      var viewMatrix = makeCameraMatrix(camera);
+      // Getting the vertices in view space
+      for (let i = 0; i<model.vertices.length; i++) {
+        transformedVertices[i] = arrayToVertex(multiplyMV(viewMatrix, transformedVertices[i]));
+      }
+
+      var transformedModel = new Model(model.name, transformedVertices, model.triangles);
  
       // Check the individual model triangles for clipping
       for (let plane of camera.clippingPlanes) {
@@ -909,6 +919,7 @@
       for (let v of transformedVertices) {
         projectedVertices.push(projectVertex(v, canvas));
       }
+      
       // Rendering the triangles
       for (let t of transformedModel.triangles) {
         if (!checkForCulling(transformedVertices, t.indices)) {
@@ -917,13 +928,23 @@
       }
       // Rendering any children instances
       if (instance.children) {
-        for (let i of instance.children) {
-          renderInstance(i,scene,canvas, modelMatrix);
+        for (let childrenInstance of instance.children) {
+          renderInstance(childrenInstance,scene,canvas, modelMatrix);
         }
       }
     }
     function renderScene(scene, canvas) {
+      for (var light of scene.lights) {
+        if (light.type == lightType.DIRECTIONAL) {
+          let mat =  makeRotationMatrix(scene.camera.orientation);
+          light.vl = arrayToVertex(multiplyMV(mat, light.direction));
+        } else if(light.type == lightType.POINT) {
+          let cameraMat = makeCameraMatrix(camera);
+          light.mat= arrayToVertex(multiplyMV(cameraMat, light.position));
+        }
+      }
       var instances = scene.instances;
+      
       for (let i=0; i<instances.length; i++) {
         if (Array.isArray(instances[i])) {
           for (let j=0; j<instances[i].length; j++) {
@@ -940,7 +961,7 @@
     //                            Event Handling                              //
     //------------------------------------------------------------------------//
     var playerTranslate= new Vertex(0,0,0);
-    var speed = 0.1;
+    var speed = 0.05;
     var shoot = false;
 
     // Laser projectile
@@ -1000,9 +1021,11 @@
 
     function animateEnemies(entityArray, frames) {
       let enemies = entityArray;
-      if (frames % 30 == 0 && enemiesSequence.length != sequenceIndex) {
+      /*
+      if ( frames % 30 == 0 && enemiesSequence.length != sequenceIndex) {
         let row = enemiesSequence[sequenceIndex++];
         let newInstance;
+        let newLight;
         for (let i=0; i<row.length; i++) {
           switch (row[i]) {
             case 0:
@@ -1015,6 +1038,12 @@
         }
         
       }
+      */
+      if (enemies.length == 0) {
+        newInstance = new Instance(whiteCube, new Vertex(-1, 0.5, 20),new Vertex(0, 180, 0), new Vertex(0.5, 0.2, 0.2), 1000);
+        enemies.push(new GameEntity("Cube", newInstance, null, 5));
+      }
+     
       for (let i=0; i<enemies.length; i++) {
         if (enemies[i]!= null) {
           if  (enemies[i].instance.position.z < 1) {
@@ -1030,8 +1059,9 @@
       let projectiles = entityArray;
       if (shoot) {
           if (laserFrameCount++ % 4 == 0) {
-            let projInstance = new Instance(redCube, new Vertex(pos, 0.5, 3), new Vertex(0, 180, 0), new Vertex(0.02, 0.02, 0.2), -1);
-            projectiles.push(new GameEntity("Laser", projInstance, null, 0));
+            let projInstance = new Instance(greenCube, new Vertex(pos, 0.5, 3), new Vertex(0, 180, 0), new Vertex(0.02, 0.02, 0.2), -1);
+            let projLight =  new Light(lightType.POINT, 0.1, projInstance.position, null, vertexFromRGBA(colors.GREEN));
+            projectiles.push(new GameEntity("Laser", projInstance, projLight, 0));
           }
         }
       for (let i=0; i<projectiles.length; i++) {
@@ -1040,6 +1070,7 @@
             projectiles.splice(i,1);
           } else {
             projectiles[i].instance.translate(new Vertex(0,0,0.30));
+            projectiles[i].light.translate(new Vertex(0,0,0.30));
           }
         }
       }
@@ -1051,10 +1082,12 @@
 
     // Detect collision between an object and all the objects in an array
     function checkForCollision(entity, entityArray) {
-      var sphere = entity.instance.getTransformedBoundingSphere();
+      var sphere = entity.instance.boundingSphere;
+
       for (let i=0; i<entityArray.length; i++) {
         let d = distance(sphere.position, entityArray[i].instance.position);
         if (d<sphere.radius) {
+          
           return i;
         }
       }
@@ -1075,6 +1108,7 @@
     //                                 Main                                   //
     //------------------------------------------------------------------------//
     function createCubeModel(color, texture) {
+      color = vertexFromRGBA(color);
       var vertices = [
         new Vertex(1,1,1),   // 0
         new Vertex(-1,1,1),  // 1
@@ -1131,6 +1165,7 @@
     }
 
     function createPlaneModel(color, texture) {
+      color = vertexFromRGBA(color);
       var vertices = [
         new Vertex(1,0,1),   // 0
         new Vertex(-1,0,1),  // 1
@@ -1152,6 +1187,7 @@
       return new Model("Plane", vertices, triangles);
     }
     function createPolyPlaneModel(sides, color, texture) {
+      color = vertexFromRGBA(color);
       var angle = 360/sides;
       var vertices = [
         new Vertex(0,0,0), 
@@ -1171,29 +1207,66 @@
      
       return new Model("PolyPlane", vertices, triangles);
     }
+    function createSphereModel(divs, color) {
+      color = vertexFromRGBA(color);
+      var vertices = [];
+      var triangles = [];
+
+      var delta_angle = 2.0*Math.PI / divs;
+
+      // Generate vertices and normals.
+      for (var d = 0; d < divs + 2; d++) {
+        var y = (2.0 / divs) * (d - divs/2);
+        var radius = Math.sqrt(1.0 - y*y);
+        for (var i = 0; i < divs; i++) {
+          var vertex = new Vertex(radius*Math.cos(i*delta_angle), y, radius*Math.sin(i*delta_angle));
+          vertices.push(vertex);
+        }
+      }
+
+      // Generate triangles.
+      for (var d = 0; d < divs; d++) {
+        for (var i = 0; i < divs; i++) {
+          var i0 = d*divs + i;
+          // Indices, normals, UVs, color, texture
+          // Indices, color, normals
+          let indices = [i0, i0+divs+1, i0+1];
+          let normals = [vertices[i0], vertices[i0+divs+1], vertices[i0+1]];
+          let UVs = [new Vertex(0,0,0), new Vertex(0,0,0), new Vertex(0,0,0)];
+          triangles.push(new Triangle(indices,normals, UVs, color));
+          indices = [i0, i0+divs, i0+divs+1];
+          normals = [vertices[i0], vertices[i0+divs], vertices[i0+divs+1]];
+          triangles.push(new Triangle(indices, normals, UVs, color));
+        }
+      }
+      return new Model("Sphere", vertices, triangles);
+    }
+
     var portalTexture = new Texture("portal-texture.jpg");
     var spaceTexture = new Texture("space-texture-2.jpg");
     
-    var greyCube = createCubeModel(color.GREY);
-    var whiteCube = createCubeModel(color.WHITE);
-    var redCube = createCubeModel(color.RED);
-    var whitePlane = createCubeModel(color.WHITE, spaceTexture);
-    var greyPlane = createPlaneModel(color.GREY);
-    var greyPolyPlane = createPolyPlaneModel(16, color.WHITE, portalTexture);
+    var greyCube = createCubeModel(colors.GREY);
+    var whiteCube = createCubeModel(colors.WHITE);
+    var greenCube = createCubeModel(colors.GREEN);
+    var whitePlane = createCubeModel(colors.WHITE, spaceTexture);
+    var purplePolyPlane = createPolyPlaneModel(16, colors.PURPLE, );
+    var greyPlane = createPlaneModel(colors.GREY);
+    var whiteSphere = createSphereModel(15, colors.WHITE);
+    var greyPolyPlane = createPolyPlaneModel(16, colors.WHITE, portalTexture);
 
     var dynamicForegroundInstances = [
-      new Instance(greyPlane, new Vertex(0, 0.01, 4),new Vertex(0, 0, 0), new Vertex(1.75, 0, 3), 0)
+      //new Instance(greyPlane, new Vertex(0, 0.01, 3),new Vertex(0, 0, 0), new Vertex(1.75, 0, 1), 0)
     ];
     var dynamicBackgroundInstances = [
       new Instance(greyPolyPlane, new Vertex(0, 1.5, 18),new Vertex(-90, 0, 0), new Vertex(3, 0, 3), -1),
     ];
     var staticForegroundInstances = [
       //new Instance(greyPlane, new Vertex(0, 0.2, 7.5),new Vertex(0, 0, 0), new Vertex(1.75, 0, 10), 0),
-      new Instance(whiteCube, new Vertex(1.75, 0.2, 2),new Vertex(0, 180, 0), new Vertex(0.1, 0.1, 5), -1),
-      new Instance(whiteCube, new Vertex(-1.75, 0.2, 2),new Vertex(0, 180, 0), new Vertex(0.1, 0.1, 5), -1),
+      //new Instance(whiteCube, new Vertex(1.75, 0.2, 2),new Vertex(0, 180, 0), new Vertex(0.1, 0.1, 5), -1),
+      //new Instance(whiteCube, new Vertex(-1.75, 0.2, 2),new Vertex(0, 180, 0), new Vertex(0.1, 0.1, 5), -1),
     ];
     var staticBackgroundInstances = [
-      new Instance(whitePlane, new Vertex(0, 0.2, 15),new Vertex(-90, 0, 0), new Vertex(9, 0, 9), 0),
+      new Instance(whitePlane, new Vertex(0, -2, 15),new Vertex(-90, 0, 0), new Vertex(10, 0, 10), 0),
     ];
     // #TODO Compute the planes normals for any fovs.
     var clippingPlanes = [
@@ -1205,10 +1278,12 @@
     ];
     // Position, rotation, clipping planes
     var camera = new Camera(new Vertex(0, 2, 0), new Vertex(15, 0, 0), clippingPlanes);
-    // type, intensity, position, direction
+    // type, totalLight, position, direction
     var lights = [
       new Light(lightType.AMBIENT, 0.6),
       new Light(lightType.POINT, 10, new Vertex(0, 3, 18)),
+
+
       //new Light(lightType.DIRECTIONAL, 0.8, null, new Vertex(4,2,-3)),
       
     ];
@@ -1217,8 +1292,10 @@
 
     var enemies = [];
     var projectiles = [];
-    var playerInstance = new Instance(whiteCube, new Vertex(0, 0.5, 2.5),new Vertex(0, 180, 0), new Vertex(0.2,0.2,0.2), -1);
-    var playerLight = new Light(lightType.POINT, 0.2, new Vertex(0, 0.5, 2.8));
+    var reactor1 = new Instance(purplePolyPlane, new Vertex(0.5, 0, -1.1),new Vertex(-90, 0,0 ), new Vertex(2,0,2), 1000);
+    var body = new Instance(greyCube, new Vertex(0, -0.5, 0),new Vertex(0, 0, 0), new Vertex(1.5,0.5,2), 1000, [reactor1]);
+    var playerInstance = new Instance(whiteSphere, new Vertex(1, 0.75, 2.5),new Vertex(0, 0, 0), new Vertex(0.1,0.1,0.1), 1000, [body]);
+    var playerLight = new Light(lightType.POINT, 0.2,playerInstance.position);
     var player = new GameEntity("Player", playerInstance, playerLight, 5);
     
     function gameLoop() {
@@ -1260,6 +1337,7 @@
             newForegroundInstances.push(entities[i].instance);
           }
         }
+        // Setting up the scenes
         let foregroundDynamic = new Scene(newForegroundInstances, camera, newLights);
         let backgroundDynamic = new Scene(newBackgroundInstances, camera, newLights);
 
