@@ -18,7 +18,10 @@
       CYAN : [0, 255, 255],
       INDIGO : [75,0,130],
       WHITE : [255,255,255],
-      GREY : [80,80,80]
+      GREY : [80,80,80],
+      LIGHTGREY : [120,120,120],
+      BLACK : [0,0,0],
+      ORANGE : [255,165,0]
     }
     const lightType = {
       AMBIENT : "ambient",
@@ -100,14 +103,9 @@
         this.reflectivity = reflectivity;
         this.children = children;
         this.boundingSphere = new BoundingSphere(this.position, 0);
+        this.colorShift = new Vertex (0,0,0);
       }
-      makeTransformMatrix() {
-        let translationMat = makeTranslationMatrix(this.position);
-        let rotationMat = makeRotationMatrix(this.rotation);
-        let scaleMat = makeScaleMatrix(this.scaling);
-        let mat = multiplyMM(rotationMat,scaleMat);
-        return multiplyMM(translationMat,mat);
-      }
+    
       translate (vector) {
         this.position.x += vector.x;
         this.position.y += vector.y;
@@ -119,14 +117,14 @@
         this.rotation.z += vector.z;
       }
       getBoundingSphere(vertices) {
-   
+        
         var highestX = vertices[0].x;
         var lowestX = vertices[0].x;
         var highestY = vertices[0].y;
         var lowestY = vertices[0].y;
         var highestZ = vertices[0].z;
         var lowestZ = vertices[0].z;
-        for (let v in vertices) {
+        for (let v of vertices) {
           if (v.x > highestX) {
             highestX = v.x;
           }
@@ -146,9 +144,9 @@
             lowestZ = v.z;
           }
         }
-
-        var mid = new Vertex((highestX+lowestX)/2,(highestY+lowestY)/2,(highestZ+lowestZ)/2);
         
+        var mid = new Vertex((highestX+lowestX)/2,(highestY+lowestY)/2,(highestZ+lowestZ)/2);
+    
         var radius=0;
         for (let v of vertices) {
           let d = distance(mid,v);
@@ -246,8 +244,8 @@
     //------------------------------------------------------------------------//
     // Main screen canvas
     var main = document.getElementById("canvas");
-    main.style.width = "500px";
-    main.style.height = "500px";
+    //main.style.width = "500px";
+    //main.style.height = "500px";
     var mainCanvas = new Canvas(main );
 
     // First Offscreen canvas
@@ -480,6 +478,13 @@
       let a = clamp(color1.w * color2.w);
       return new Vertex(r,g,b,a);
     }
+    function addColors(color1, color2) {
+      let r = color1.x + color2.x;
+      let g = clamp(color1.y + color2.y);
+      let b = clamp(color1.z + color2.z);
+      let a = clamp(color1.w + color2.w);
+      return new Vertex(r,g,b,a);
+    }
     function toRad(angle) {
       return angle*Math.PI/180;
     }
@@ -560,10 +565,7 @@
       let zRotationMat = makeZRotationMatrix(orientation.z);
       return multiplyMM(xRotationMat, multiplyMM(yRotationMat, zRotationMat));
     }
-    function makeTransformMatrix(position, rotation, scaling) {
-        let translationMat = makeTranslationMatrix(position);
-        let rotationMat = makeRotationMatrix(rotation);
-        let scaleMat = makeScaleMatrix(scaling);
+    function makeTransformMatrix(translationMat, rotationMat, scaleMat) {
         let mat = multiplyMM(rotationMat,scaleMat);
         return multiplyMM(translationMat,mat);
       }
@@ -795,7 +797,7 @@
       var p = canvasToViewport(x,y, canvas);
       return new Vertex(p.x, p.y, z);
     }
-    function renderTriangle(triangle, transformed, projected, instance, scene, canvas) {
+    function renderTriangle(triangle, transformed, projected, instance, scene, canvas, rotationMat) {
     
       // Sorted indices
       var [i0,i1,i2] = sortIndices(triangle.indices, projected);
@@ -808,7 +810,9 @@
       var p1 = projected[triangle.indices[i1]];
       var p2 = projected[triangle.indices[i2]];
       // Vertex normals 
-      var transform = multiplyMM(transpose(makeRotationMatrix(scene.camera.orientation)), makeRotationMatrix(instance.rotation));
+      var transform = multiplyMM(transpose(makeRotationMatrix(scene.camera.orientation)), rotationMat);
+    
+      
       var n0 = arrayToVertex(multiplyMV(transform, triangle.normals[i0]));
       var n1 = arrayToVertex(multiplyMV(transform, triangle.normals[i1]));
       var n2 = arrayToVertex(multiplyMV(transform, triangle.normals[i2]));
@@ -875,21 +879,31 @@
             } else {
               color = triangle.color;
             }
-            
+            color = addColors(color, instance.colorShift);
             let shadedColor = multiplyColors(totalLight, color);
             putPixel(x,y,shadedColor.toRGBA(), canvas);
           }
         }
       }
     }
-    function renderInstance(instance, scene, canvas, parentMatrix) {
+    function renderInstance(instance, scene, canvas, parentMatrices) {
       var model = instance.model;
       var camera  = scene.camera;
       // Get the model matrix
-      var modelMatrix = instance.makeTransformMatrix();
-      if (parentMatrix) {
-        modelMatrix =  multiplyMM(parentMatrix, modelMatrix);
+      var translationMat = makeTranslationMatrix(instance.position);
+      var rotationMat = makeRotationMatrix(instance.rotation);
+      var scaleMat = makeScaleMatrix(instance.scaling);
+      var modelMatrix, rotation;
+      if (parentMatrices) {
+        var parentMatrix = multiplyMM(parentMatrices[0], multiplyMM(parentMatrices[1],parentMatrices[2]));
+        modelMatrix =  multiplyMM(translationMat, multiplyMM(rotationMat,scaleMat));
+        modelMatrix = multiplyMM(parentMatrix, modelMatrix);
+        rotation = multiplyMM(parentMatrices[1],rotationMat);
+      } else {
+        modelMatrix =  multiplyMM(translationMat,multiplyMM(rotationMat,scaleMat));
+        rotation = rotationMat;
       }
+      
       var transformedVertices = [];
       // Get the vertices in world space
       for (let i = 0; i<model.vertices.length; i++) {
@@ -923,13 +937,13 @@
       // Rendering the triangles
       for (let t of transformedModel.triangles) {
         if (!checkForCulling(transformedVertices, t.indices)) {
-          renderTriangle(t, transformedVertices,projectedVertices, instance, scene, canvas);
+          renderTriangle(t, transformedVertices,projectedVertices, instance, scene, canvas,rotation);
         }
       }
       // Rendering any children instances
       if (instance.children) {
         for (let childrenInstance of instance.children) {
-          renderInstance(childrenInstance,scene,canvas, modelMatrix);
+          renderInstance(childrenInstance,scene,canvas, [translationMat,rotationMat,scaleMat]);
         }
       }
     }
@@ -960,8 +974,9 @@
     //------------------------------------------------------------------------//
     //                            Event Handling                              //
     //------------------------------------------------------------------------//
-    var playerTranslate= new Vertex(0,0,0);
-    var speed = 0.05;
+    var playerTranslate = new Vertex(0,0,0);
+    var playerRotate = new Vertex(0,0,0);
+    var speed = 0.075;
     var shoot = false;
 
     // Laser projectile
@@ -971,9 +986,11 @@
     function handleKeyPress(event) {
       if(event.keyCode == 37) {
         playerTranslate.x = -speed;
+        playerRotate.y =  100 *speed;
       }
       else if(event.keyCode == 39) {
         playerTranslate.x = speed;
+        playerRotate.y = - 100 * speed;
       }
       if (event.keyCode == 32) {
         shoot=true;
@@ -982,9 +999,11 @@
     function handleKeyRelease(event) {
       if(event.keyCode == 37) {
         playerTranslate.x = 0;
+        playerRotate.y = 0;
       }
       else if(event.keyCode == 39) {
         playerTranslate.x = 0;
+        playerRotate.y = 0;
       }
       if (event.keyCode == 32) {
         shoot= false;
@@ -1021,7 +1040,7 @@
 
     function animateEnemies(entityArray, frames) {
       let enemies = entityArray;
-      /*
+
       if ( frames % 30 == 0 && enemiesSequence.length != sequenceIndex) {
         let row = enemiesSequence[sequenceIndex++];
         let newInstance;
@@ -1031,18 +1050,14 @@
             case 0:
               continue;
             case 1:
-              newInstance = new Instance(whiteCube, new Vertex(i-1, 0.5, 20),new Vertex(0, 180, 0), new Vertex(0.5, 0.2, 0.2), 1000);
+              newInstance = new Instance(Object.assign({},whiteCube), new Vertex(i-1, 0.5, 20),new Vertex(0, 180, 0), new Vertex(0.5, 0.2, 0.2), 1000);
               break;
           };
-          enemies.push(new GameEntity("Cube", newInstance, null, 5));
+          enemies.push(new GameEntity("Cube", newInstance, null, 3));
         }
         
       }
-      */
-      if (enemies.length == 0) {
-        newInstance = new Instance(whiteCube, new Vertex(-1, 0.5, 20),new Vertex(0, 180, 0), new Vertex(0.5, 0.2, 0.2), 1000);
-        enemies.push(new GameEntity("Cube", newInstance, null, 5));
-      }
+
      
       for (let i=0; i<enemies.length; i++) {
         if (enemies[i]!= null) {
@@ -1087,7 +1102,6 @@
       for (let i=0; i<entityArray.length; i++) {
         let d = distance(sphere.position, entityArray[i].instance.position);
         if (d<sphere.radius) {
-          
           return i;
         }
       }
@@ -1098,9 +1112,15 @@
       for (let i = 0; i<enemies.length; i++) {
         let projIndex = checkForCollision(enemies[i], projectiles);
         if (projIndex!= null) {
-          enemies.splice(i,1);
+          enemies[i].hp -= 1;
           projectiles.splice(projIndex,1);
+          if (enemies[i].hp <=0) {
+            enemies.splice(i,1);
+          } else {
+            enemies[i].instance.colorShift = new Vertex(0.5 * 1/enemies[i].hp,0,0);
+          }
         }
+     
       }
       return [enemies, projectiles];
     }
@@ -1186,6 +1206,7 @@
       ]
       return new Model("Plane", vertices, triangles);
     }
+    
     function createPolyPlaneModel(sides, color, texture) {
       color = vertexFromRGBA(color);
       var angle = 360/sides;
@@ -1207,6 +1228,69 @@
      
       return new Model("PolyPlane", vertices, triangles);
     }
+    // #TODO Compute UVs for textures
+    function createPyramidModel(sides, color) {
+      color = vertexFromRGBA(color);
+      var angle = 360/sides;
+      var vertices = [
+        new Vertex(0,0,0), // Center point of base
+        new Vertex(0,1,0), // Apex
+        new Vertex(Math.cos(toRad(0)), 0, Math.sin(toRad(0)))
+      ];
+
+      var triangles = [];
+      var baseNormals = [new Vertex(0, -1, 0), new Vertex(0, -1, 0), new Vertex(0, -1, 0)];
+      
+      let UVs = [new Vertex(0, 0, 0), new Vertex(0, 0, 0), new Vertex(0, 0, 0)];
+      for (var i=2; i<=sides;i++) {
+        vertices.push(new Vertex(Math.cos(toRad(angle*(i-1))), 0, Math.sin(toRad(angle*(i-1)))));
+        triangles.push(new Triangle([0, i, i+1], baseNormals, UVs, color));
+        let normalAngle = toRad((angle*(i-1) - angle*(i-2))/2 + angle*(i-2));
+        let sideNormal = new Vertex(Math.cos(normalAngle), 1, Math.sin(normalAngle));
+        triangles.push(new Triangle([i, 1 , i+1], [sideNormal, sideNormal, sideNormal], UVs, color));
+      }
+      var normalAngle = toRad(360 - angle/2);
+      var sideNormal = new Vertex(Math.cos(normalAngle), 1, Math.sin(normalAngle));
+      triangles.push(new Triangle([0, vertices.length-1, 2], baseNormals, UVs, color));
+      triangles.push(new Triangle([vertices.length-1, 1, 2], [sideNormal, sideNormal, sideNormal], UVs, color));
+
+      return new Model("Pyramid", vertices, triangles);
+    }
+    function createPrismModel(sides, color) {
+      color = vertexFromRGBA(color);
+      var angle = 360/sides;
+      var vertices = [
+        new Vertex(0,0,0), // Center point of bottom base
+        new Vertex(0,1,0), // Center point of top base
+        new Vertex(Math.cos(toRad(0)), 0, Math.sin(toRad(0))),
+        new Vertex(Math.cos(toRad(0)), 1, Math.sin(toRad(0)))
+      ];
+
+      var triangles = [];
+      var bottomBaseNormals = [new Vertex(0, -1, 0), new Vertex(0, -1, 0), new Vertex(0, -1, 0)];
+      var topBaseNormals = [new Vertex(0, 1, 0), new Vertex(0, 1, 0), new Vertex(0, 1, 0)];
+      let UVs = [new Vertex(0, 0, 0), new Vertex(0, 0, 0), new Vertex(0, 0, 0)];
+
+      for (var i=2; i<sides*2; i+=2) {
+        vertices.push(new Vertex(Math.cos(toRad(angle*(i/2))), 0, Math.sin(toRad(angle*(i/2))))); // i+2
+        vertices.push(new Vertex(Math.cos(toRad(angle*(i/2))), 1, Math.sin(toRad(angle*(i/2))))); // i+3
+        triangles.push(new Triangle([0, i, i+2], bottomBaseNormals, UVs, color));
+        triangles.push(new Triangle([1, i+3, i+1], topBaseNormals, UVs, color));
+        let normalAngle = toRad((angle*(i/2) - angle*(i/2-1))/2 + angle*(i/2-1));
+        let sideNormal = new Vertex(Math.cos(normalAngle), 0, Math.sin(normalAngle));
+        triangles.push(new Triangle([i+1, i+2 , i], [sideNormal, sideNormal, sideNormal], UVs, color));
+        triangles.push(new Triangle([i+1, i+3 , i+2], [sideNormal, sideNormal, sideNormal], UVs, color));
+      }
+      var normalAngle = toRad(360 - angle/2);
+      var sideNormal = new Vertex(Math.cos(normalAngle), 0, Math.sin(normalAngle));
+      triangles.push(new Triangle([0, vertices.length-2, 2], bottomBaseNormals, UVs, color));
+      triangles.push(new Triangle([1, 3, vertices.length-1], topBaseNormals, UVs, color));
+      triangles.push(new Triangle([vertices.length-2, vertices.length-1, 2], [sideNormal, sideNormal, sideNormal], UVs, color));
+      triangles.push(new Triangle([ vertices.length-1, 3, 2], [sideNormal, sideNormal, sideNormal], UVs, color));
+
+      return new Model("Prism", vertices, triangles);
+    }
+    // #TODO Compute UVs for textures
     function createSphereModel(divs, color) {
       color = vertexFromRGBA(color);
       var vertices = [];
@@ -1251,11 +1335,14 @@
     var whitePlane = createCubeModel(colors.WHITE, spaceTexture);
     var purplePolyPlane = createPolyPlaneModel(16, colors.PURPLE, );
     var greyPlane = createPlaneModel(colors.GREY);
-    var whiteSphere = createSphereModel(15, colors.WHITE);
+    var blackSphere = createSphereModel(15, colors.WHITE);
+    var orangeSphere = createSphereModel(15, colors.ORANGE);
     var greyPolyPlane = createPolyPlaneModel(16, colors.WHITE, portalTexture);
-
+    var lightGrey6Pyramid = createPyramidModel(6, colors.LIGHTGREY);
+    var whitePrism = createPrismModel(6, colors.WHITE);
+    var greyPrism = createPrismModel(8, colors.GREY);
+    var indigoPrism = createPrismModel(3, colors.INDIGO);
     var dynamicForegroundInstances = [
-      //new Instance(greyPlane, new Vertex(0, 0.01, 3),new Vertex(0, 0, 0), new Vertex(1.75, 0, 1), 0)
     ];
     var dynamicBackgroundInstances = [
       new Instance(greyPolyPlane, new Vertex(0, 1.5, 18),new Vertex(-90, 0, 0), new Vertex(3, 0, 3), -1),
@@ -1292,10 +1379,18 @@
 
     var enemies = [];
     var projectiles = [];
-    var reactor1 = new Instance(purplePolyPlane, new Vertex(0.5, 0, -1.1),new Vertex(-90, 0,0 ), new Vertex(2,0,2), 1000);
-    var body = new Instance(greyCube, new Vertex(0, -0.5, 0),new Vertex(0, 0, 0), new Vertex(1.5,0.5,2), 1000, [reactor1]);
-    var playerInstance = new Instance(whiteSphere, new Vertex(1, 0.75, 2.5),new Vertex(0, 0, 0), new Vertex(0.1,0.1,0.1), 1000, [body]);
-    var playerLight = new Light(lightType.POINT, 0.2,playerInstance.position);
+    var leftFlame = new Instance(orangeSphere, new Vertex(-0.4, -0.05, -0.1),new Vertex(0, 0, 0), new Vertex(0.15,0.05,0.3), -1);
+    var rightFlame = new Instance(orangeSphere, new Vertex(0.4, -0.05, -0.1),new Vertex(0, 0, 0), new Vertex(0.15,0.05,0.3), -1);
+    var rightReactor = new Instance(greyPrism, new Vertex(0.4, -0.05, -0.1),new Vertex(0, 0, 0), new Vertex(0.25,0.05,0.5), 1000);
+    var leftReactor = new Instance(greyPrism, new Vertex(-0.4, -0.05, -0.1),new Vertex(0, 0, 0), new Vertex(0.25,0.05,0.5), 1000);
+    var leftWing = new Instance(indigoPrism, new Vertex(-0.9, 0.17, 0),new Vertex(90, 192, 15), new Vertex(1,0.6,0.3), 1000);
+    var rightWing = new Instance(indigoPrism, new Vertex(0.9, 0.17, 0),new Vertex(90, -14, 15), new Vertex(1,0.6,0.3), 1000);
+    var cockpit = new Instance(blackSphere, new Vertex(0, 0.2, -1),new Vertex(-90, 0, 0), new Vertex(0.3,0.75,0.1), 1000);
+    var bodyParts = [cockpit, rightWing, leftWing,  rightReactor, leftReactor, leftFlame, rightFlame];
+    var body = new Instance(lightGrey6Pyramid, new Vertex(0, 0.5, 2.5),new Vertex(90,0, 0), new Vertex(0.25, 1, 0.1), 1000, bodyParts);
+    var playerInstance = body;
+    //var playerLight = new Light(lightType.POINT, 3,new Vertex(0, 2, -2));
+    var playerLight = null;
     var player = new GameEntity("Player", playerInstance, playerLight, 5);
     
     function gameLoop() {
@@ -1307,9 +1402,19 @@
         then = now - (elapsed % fpsInterval);
         clearBuffers(mainCanvas);
         let playerPosX = player.instance.position.x + playerTranslate.x;
+        let playerAngleY = player.instance.rotation.y + playerRotate.y;
         if (playerPosX > -1.45 && playerPosX < 1.45) {
           player.instance.translate(playerTranslate);
-          player.light.translate(playerTranslate);
+          //player.light.translate(playerTranslate);
+        }
+        if (playerAngleY >= -20 && playerAngleY <= 20 && playerRotate.y != 0){
+          player.instance.rotate(playerRotate);
+        } else {
+          if (playerAngleY < 0 && playerRotate.y == 0) {
+            player.instance.rotate(new Vertex(0,20*speed,0));
+          } else if (playerAngleY > 0 && playerRotate.y == 0) {
+            player.instance.rotate(new Vertex(0,-20*speed,0));
+          }
         }
         enemies = animateEnemies(enemies, frameCount);
         projectiles  = animateProjectiles(projectiles, playerPosX);
