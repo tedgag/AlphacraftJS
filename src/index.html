@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>HTML Rasterizer</title>
+  <script src="scripts/geometry.js"></script>
+  <script src="scripts/classes.js"></script>
+  <script src="scripts/renderer.js"></script>
+  <script src="scripts/models.js"></script>
+  <script src="scripts/gameplay.js"></script>
+  <script src="scripts/scene.js"></script>
+</head>
+<body>
+<canvas id="canvas" width="350" height="350" style="border: 1px grey solid">
+  <script>
+    //------------------------------------------------------------------------//
+    //                            Canvas Data                                 //
+    //------------------------------------------------------------------------//
+    // Main screen canvas
+    var main = document.getElementById("canvas");
+    //main.style.width = "500px";
+    //main.style.height = "500px";
+    var mainCanvas = new Canvas(main );
+
+    // First Offscreen canvas
+
+    var offScreen1 = document.createElement('canvas');
+    offScreen1.width = main.width;
+    offScreen1.height = main.width;
+    var offScreenFrontCanvas = new Canvas(offScreen1);
+
+    // Second Offscreen canvas
+
+    var offScreen2 = document.createElement('canvas');
+    offScreen2.width = main.width;
+    offScreen2.height = main.width;
+    var offScreenBackCanvas = new Canvas(offScreen2);
+
+    // To store depth of pixels to be drawn
+    var depthBuffer = new Array(canvas.width * canvas.height);
+
+    function putPixel(x, y, color, canvas) {
+      x = canvas.width/2 + Math.floor(x);
+      y = canvas.height/2 - Math.floor(y) - 1;
+      if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) {
+        return;
+      }
+      var offset = 4*x + canvas.pitch*y;
+      canvas.buffer.data[offset++] = parseInt(color[0]);
+      canvas.buffer.data[offset++] = parseInt(color[1]);
+      canvas.buffer.data[offset++] = parseInt(color[2]);
+      canvas.buffer.data[offset++] = 255;
+    }
+    function updateCanvas(canvas) {
+      canvas.context.putImageData(canvas.buffer, 0, 0);
+    }
+    function clearBuffers(canvas) {
+      canvas.context.fillStyle = "#202020";
+      canvas.context.fillRect(0, 0, canvas.width, canvas.height);
+      canvas.buffer = canvas.context.getImageData(0, 0, canvas.width, canvas.height);
+      depthBuffer = new Array(canvas.width * canvas.height);
+    }
+    
+    function render() {
+      renderScene(backgroundStatic,offScreenBackCanvas);
+      updateCanvas(offScreenBackCanvas);
+      renderScene(foregroundStatic,offScreenFrontCanvas);
+      updateCanvas(offScreenFrontCanvas);
+      frameLoop();
+    }
+    
+    // Wait for texture to load.
+    setTimeout(function() { render(); }, 50);
+
+  </script>
+</canvas>
+</html>
