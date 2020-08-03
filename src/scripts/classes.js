@@ -2,24 +2,32 @@
 //                                 Enums                                  //
 //------------------------------------------------------------------------//
 const colors = {
-    RED : [255, 0, 0],
-    DARKRED : [155, 0, 0],
-    GREEN : [0, 255, 0],
-    BLUE : [0, 0, 255],
-    YELLOW : [255, 255, 0],
-    PURPLE : [255, 0, 255],
-    CYAN : [0, 255, 255],
-    INDIGO : [75,0,130],
-    WHITE : [255,255,255],
-    GREY : [80,80,80],
-    LIGHTGREY : [120,120,120],
-    BLACK : [0,0,0],
-    ORANGE : [255,165,0]
+        RED : [255, 0, 0],
+        DARKRED : [155, 0, 0],
+        GREEN : [0, 255, 0],
+        GREENYELLOW : [153,235,17],
+        BLUE : [0, 0, 255],
+        YELLOW : [255, 255, 0],
+        PURPLE : [255, 0, 255],
+        CYAN : [0, 255, 255],
+        INDIGO : [70,0,130],
+        LIGHTINDIGO : [ 120,0,185],
+        CORNFLOWER : [76,82,112],
+        WHITE : [255,255,255],
+        GREY : [80,80,80],
+        DARKGREY : [40,40,40],
+        LIGHTGREY : [120,120,120],
+        BLACK : [0,0,0],
+        ORANGE : [255,165,0],
+        DARKPURPLE : [102,51,153],
+        DEEPPINK : [255,20,147],
+        CHARTREUSE : [127, 255, 0],
+        DARKORANGE: [255, 140, 0]
     }
     const lightType = {
-    AMBIENT : "ambient",
-    POINT : "point",
-    DIRECTIONAL : "directional"
+        AMBIENT : "ambient",
+        POINT : "point",
+        DIRECTIONAL : "directional"
     }
 
 //------------------------------------------------------------------------//
@@ -206,8 +214,8 @@ class Texture{
         this.image.src = source;
     }
     getTexel(u, v) {
-        var iu = parseInt(u*this.iw);
-        var iv = parseInt(v*this.ih);
+        var iu = Math.trunc(u*this.iw);
+        var iv = Math.trunc(v*this.ih);
 
         var offset = (iv*this.iw*4 + iu*4);
 
@@ -219,10 +227,22 @@ class Texture{
     }
 }
 class GameEntity {
-    constructor(name, instance, lights, hp) {
+    constructor(name, instance, lights, hp, attackDelay, projDamage, projCount) {
         this.name = name;
         this.instance = instance;
         this.lights = lights;
         this.hp = hp;
+        this.attackDelay = attackDelay;
+        this.frameCount = 0;
+        this.projDamage = projDamage;
+        this.projCount = projCount;
+    }
+}
+class Projectile {
+    constructor(instance, lights, damage, speed) {
+        this.instance = instance;
+        this.lights = lights;
+        this.damage = damage;
+        this.speed = speed;
     }
 }

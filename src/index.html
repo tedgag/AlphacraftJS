@@ -45,10 +45,10 @@
         return;
       }
       var offset = 4*x + canvas.pitch*y;
-      canvas.buffer.data[offset++] = parseInt(color[0]);
-      canvas.buffer.data[offset++] = parseInt(color[1]);
-      canvas.buffer.data[offset++] = parseInt(color[2]);
-      canvas.buffer.data[offset++] = 255;
+      canvas.buffer.data[offset++] = Math.trunc(color[0]);
+      canvas.buffer.data[offset++] = Math.trunc(color[1]);
+      canvas.buffer.data[offset++] = Math.trunc(color[2]);
+      canvas.buffer.data[offset++] = Math.trunc(color[3]);
     }
     function updateCanvas(canvas) {
       canvas.context.putImageData(canvas.buffer, 0, 0);

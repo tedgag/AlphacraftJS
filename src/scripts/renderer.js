@@ -91,8 +91,8 @@ function clipModel(model, plane) {
 //------------------------------------------------------------------------//
 
 function updateDepthBuffer(x, y, zInv, canvas) {
-    var x = canvas.width/2 + parseInt(x);
-    var y = canvas.height/2 - parseInt(y) - 1;
+    var x = canvas.width/2 + Math.trunc(x);
+    var y = canvas.height/2 - Math.trunc(y) - 1;
 
     if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) {
         return false;
@@ -176,7 +176,7 @@ function computeLighting(vertex, normal,  scene, reflectivity) {
 //                              Rendering                                 //
 //------------------------------------------------------------------------//
 function viewportToCanvas(x,y, canvas) {
-    return new Vertex(parseInt(x*canvas.width/viewportWidth), parseInt(y*canvas.height/viewportHeight));
+    return new Vertex(Math.trunc(x*canvas.width/viewportWidth), Math.trunc(y*canvas.height/viewportHeight));
 }
 function canvasToViewport(x,y, canvas) {
     return new Vertex(x*viewportWidth/canvas.width, y*viewportHeight/canvas.height);
@@ -191,7 +191,8 @@ function unProjectVertex(x,y,z,canvas) {
     return new Vertex(p.x, p.y, z);
 }
 function renderTriangle(triangle, transformed, projected, instance, scene, canvas, rotationMat) {
-
+    
+    
     // Sorted indices
     var [i0,i1,i2] = sortIndices(triangle.indices, projected);
     // Transformed vertices
@@ -202,6 +203,7 @@ function renderTriangle(triangle, transformed, projected, instance, scene, canva
     var p0 = projected[triangle.indices[i0]];
     var p1 = projected[triangle.indices[i1]];
     var p2 = projected[triangle.indices[i2]];
+    
     // Vertex normals 
     var transform = multiplyMM(transpose(makeRotationMatrix(scene.camera.orientation)), rotationMat);
 
@@ -222,7 +224,7 @@ function renderTriangle(triangle, transformed, projected, instance, scene, canva
         var [vz02, vz012] = interpolateEdges(p0.y, triangle.UVs[i0].y / t0.z,p1.y, triangle.UVs[i1].y / t1.z,p2.y, triangle.UVs[i2].y / t2.z);
     }
     // Determine left and right sides
-    var m = parseInt(x012.length/2);
+    var m = Math.trunc(x012.length/2);
     if (x02[m] < x012[m]) {
         var [xLeft, xRight] = [x02, x012];
         var [izLeft, izRight] = [iz02, iz012];
@@ -244,41 +246,47 @@ function renderTriangle(triangle, transformed, projected, instance, scene, canva
         var [vzLeft, vzRight] = [vz012, vz02];
         }
     }
-
+    
     // Draw the segments
     for (let y = p0.y, l1=p2.y; y <= l1; y++) {
         let y0 = p0.y;
-        let xL = parseInt(xLeft[y-y0]);
-        let xR = parseInt(xRight[y-y0]);
+        let xL = Math.trunc(xLeft[y-y0]);
+        let xR = Math.trunc(xRight[y-y0]);
+        
         let izSegment = interpolate(xL, izLeft[y - y0], xR, izRight[y - y0]);
         let nxSegment = interpolate(xL, nxLeft[y - y0], xR, nxRight[y - y0]);
         let nySegment = interpolate(xL, nyLeft[y - y0], xR, nyRight[y - y0]);
         let nzSegment = interpolate(xL, nzLeft[y - y0], xR, nzRight[y - y0]);
         let uzSegment, vzSegment;
         if (hasTexture) {
-        uzSegment = interpolate(xL, uzLeft[y - y0], xR, uzRight[y - y0]);
-        vzSegment = interpolate(xL, vzLeft[y - y0], xR, vzRight[y - y0]);
-        }  
-        for (let x = xL, l2 = xR; x <= l2; x++) {
-        let iz = izSegment[x - xL];
-        if (updateDepthBuffer(x, y, iz, canvas)) {  
-            let vertex = unProjectVertex(x, y, 1.0/iz, canvas);
-            let normal = new Vertex(nxSegment[x - xL], nySegment[x - xL], nzSegment[x - xL]);
-            let totalLight = computeLighting(vertex, normal, scene, instance.reflectivity);
-            let color;
-            if (hasTexture) {
-            color = triangle.texture.getTexel(uzSegment[x - xL] / iz, vzSegment[x - xL] / iz);
-            } else {
-            color = triangle.color;
-            }
-            color = addColors(color, instance.colorShift);
-            let shadedColor = multiplyColors(totalLight, color);
-            putPixel(x,y,shadedColor.toRGBA(), canvas);
+            uzSegment = interpolate(xL, uzLeft[y - y0], xR, uzRight[y - y0]);
+            vzSegment = interpolate(xL, vzLeft[y - y0], xR, vzRight[y - y0]);
         }
+        for (let x = xL, l2 = xR; x <= l2; x++) {
+            if(instance.position.x == -1.1){
+            }
+            let iz = izSegment[x - xL];
+            if (updateDepthBuffer(x, y, iz, canvas)) {  
+                let vertex = unProjectVertex(x, y, 1.0/iz, canvas);
+                let normal = new Vertex(nxSegment[x - xL], nySegment[x - xL], nzSegment[x - xL]);
+                let totalLight = computeLighting(vertex, normal, scene, instance.reflectivity);
+                let color;
+                if (hasTexture) {
+                    color = triangle.texture.getTexel(uzSegment[x - xL] / iz, vzSegment[x - xL] / iz);
+                } else {
+                    color = triangle.color;
+                }
+                color = addColors(color, instance.colorShift);
+                let shadedColor = multiplyColors(totalLight, color);
+                putPixel(x,y,shadedColor.toRGBA(), canvas);
+            }
         }
     }
 }
 function renderInstance(instance, scene, canvas, parentMatrix, parentRotation) {
+    if(instance == null) {
+        return null;
+    }
     var model = instance.model;
     var camera  = scene.camera;
     // Get the model matrix
@@ -327,13 +335,13 @@ function renderInstance(instance, scene, canvas, parentMatrix, parentRotation) {
     // Rendering the triangles
     for (let t of transformedModel.triangles) {
         if (!checkForCulling(transformedVertices, t.indices)) {
-        renderTriangle(t, transformedVertices,projectedVertices, instance, scene, canvas, rotation);
+            renderTriangle(t, transformedVertices,projectedVertices, instance, scene, canvas, rotation);
         }
     }
     // Rendering any children instances
     if (instance.children) {
         for (let childrenInstance of instance.children) {
-        renderInstance(childrenInstance,scene,canvas, modelMat, rotation);
+            renderInstance(childrenInstance,scene,canvas, modelMat, rotation);
         }
     }
 }

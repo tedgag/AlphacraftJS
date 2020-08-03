@@ -33,10 +33,10 @@ function distance(p1,p2) {
 
 // Mid point between two points.
 function midVertex(p1,p2) {
-    let x = parseInt((p1.x+p2.x)/2);
-    let y = parseInt((p1.y+p2.y)/2);
+    let x = Math.trunc((p1.x+p2.x)/2);
+    let y = Math.trunc((p1.y+p2.y)/2);
     if (p1.z && p2.z) {
-        let z = parseInt((p1.z+p2.z)/2);
+        let z = Math.trunc((p1.z+p2.z)/2);
         return new Vertex(x,y,z);
     } else {
         return new Vertex(x,y);
@@ -104,6 +104,7 @@ function arrayToVertex(array) {
 function interpolate(x0,y0,x1,y1) {
     if (x0==x1){
         return [ y0 ];
+        
     }
     var values = [];
     var a = (y1-y0) / (x1-x0);
