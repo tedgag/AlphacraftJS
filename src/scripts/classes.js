@@ -94,80 +94,80 @@ constructor(name,vertices,triangles, boundingSphere) {
 }
 }
 class Instance {
-constructor(model,position,rotation,scaling,reflectivity, children) {
-    this.model=model;
-    this.position = position;
-    this.rotation = rotation;
-    this.scaling = scaling;
-    this.reflectivity = reflectivity;
-    this.children = children;
-    this.boundingSphere = new BoundingSphere(this.position, 0);
-    this.colorShift = new Vertex (0,0,0);
-}
+    constructor(model,position,rotation,scaling,reflectivity, children) {
+        this.model=model;
+        this.position = position;
+        this.rotation = rotation;
+        this.scaling = scaling;
+        this.reflectivity = reflectivity;
+        this.children = children;
+        this.boundingSphere = new BoundingSphere(this.position, 0);
+        this.colorShift = new Vertex (0,0,0);
+    }
 
-translate (vector) {
-    this.position.x += vector.x;
-    this.position.y += vector.y;
-    this.position.z += vector.z;
-}
-rotate (vector) {
-    this.rotation.x += vector.x;
-    this.rotation.y += vector.y;
-    this.rotation.z += vector.z;
-}
-getBoundingSphere(vertices) {
-    
-    var highestX = vertices[0].x;
-    var lowestX = vertices[0].x;
-    var highestY = vertices[0].y;
-    var lowestY = vertices[0].y;
-    var highestZ = vertices[0].z;
-    var lowestZ = vertices[0].z;
-    for (let v of vertices) {
-    if (v.x > highestX) {
-        highestX = v.x;
+    translate (vector) {
+        this.position.x += vector.x;
+        this.position.y += vector.y;
+        this.position.z += vector.z;
     }
-    if (v.x < lowestX) {
-        lowestX = v.x;
+    rotate (vector) {
+        this.rotation.x += vector.x;
+        this.rotation.y += vector.y;
+        this.rotation.z += vector.z;
     }
-    if (v.y > highestY) {
-        highestY = v.y;
-    }
-    if (v.y < lowestY) {
-        lowestY = v.y;
-    }
-    if (v.z > highestZ) {
-        highestZ = v.z;
-    }
-    if (v.z < lowestZ) {
-        lowestZ = v.z;
-    }
-    }
-    
-    var mid = new Vertex((highestX+lowestX)/2,(highestY+lowestY)/2,(highestZ+lowestZ)/2);
+    getBoundingSphere(vertices) {
+        var highestX = vertices[0].x;
+        var lowestX = vertices[0].x;
+        var highestY = vertices[0].y;
+        var lowestY = vertices[0].y;
+        var highestZ = vertices[0].z;
+        var lowestZ = vertices[0].z;
+        for (let v of vertices) {
+            if (v.x > highestX) {
+                highestX = v.x;
+            }
+            if (v.x < lowestX) {
+                lowestX = v.x;
+            }
+            if (v.y > highestY) {
+                highestY = v.y;
+            }
+            if (v.y < lowestY) {
+                lowestY = v.y;
+            }
+            if (v.z > highestZ) {
+                highestZ = v.z;
+            }
+            if (v.z < lowestZ) {
+                lowestZ = v.z;
+            }
+        }
+        
+        var mid = new Vertex((highestX+lowestX)/2,(highestY+lowestY)/2,(highestZ+lowestZ)/2);
 
-    var radius=0;
-    for (let v of vertices) {
-    let d = distance(mid,v);
-    if(d>radius) {
-        radius=d;
+        var radius=0;
+        for (let v of vertices) {
+        let d = distance(mid,v);
+            if(d>radius) {
+                radius=d;
+            }
+        }
+        this.boundingSphere = new BoundingSphere(mid,radius);
+        return this.boundingSphere;
     }
-    }
-    this.boundingSphere = new BoundingSphere(mid,radius);
-    return this.boundingSphere;
-}
+    
 }
 class Camera {
-constructor(position, orientation, clippingPlanes) {
-    this.position = position;
-    this.orientation = orientation;
-    this.clippingPlanes = clippingPlanes
-}
-translate (vector) {
-    this.position.x += vector.x;
-    this.position.y += vector.y;
-    this.position.z += vector.z;
-}
+    constructor(position, orientation, clippingPlanes) {
+        this.position = position;
+        this.orientation = orientation;
+        this.clippingPlanes = clippingPlanes
+    }
+    translate (vector) {
+        this.position.x += vector.x;
+        this.position.y += vector.y;
+        this.position.z += vector.z;
+    }
 }
 class Plane {
 constructor(normal, distance) {
@@ -237,9 +237,11 @@ class GameEntity {
         this.projDamage = projDamage;
         this.projCount = projCount;
     }
+    
 }
 class Projectile {
-    constructor(instance, lights, damage, speed) {
+    constructor(type, instance, lights, damage, speed) {
+        this.type = type;
         this.instance = instance;
         this.lights = lights;
         this.damage = damage;

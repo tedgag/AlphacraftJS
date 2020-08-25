@@ -244,6 +244,7 @@ var chartreuse3Prism = createPrismModel(3, colors.CHARTREUSE);
 var darkOrange3Prism = createPrismModel(3, colors.DARKORANGE);
 var lightIndigo6Prism = createPrismModel(6, colors.LIGHTINDIGO );
 var darkGrey6Prism = createPrismModel(6, colors.DARKGREY);
+var darkGrey3Prism = createPrismModel(3, colors.DARKGREY);
 //------------------------------------------------------------------------//
 //                           Complex Models                               //
 //------------------------------------------------------------------------//
@@ -252,14 +253,14 @@ function createPlayer() {
   var rightFlame = new Instance(orangeSphere, new Vertex(0.4, -0.05, -0.1),new Vertex(0, 0, 0), new Vertex(0.15,0.05,0.3), -1);
   var rightReactor = new Instance(grey8Prism, new Vertex(0.4, -0.05, -0.1),new Vertex(0, 0, 0), new Vertex(0.25,0.05,0.5), 1000);
   var leftReactor = new Instance(grey8Prism, new Vertex(-0.4, -0.05, -0.1),new Vertex(0, 0, 0), new Vertex(0.25,0.05,0.5), 1000);
-  var leftWing = new Instance(indigo3Prism, new Vertex(-0.9, 0.17, 0),new Vertex(90, 192, 15), new Vertex(1,0.6,0.3), 1000);
-  var rightWing = new Instance(indigo3Prism, new Vertex(0.9, 0.17, 0),new Vertex(90, -14, 15), new Vertex(1,0.6,0.3), 1000);
+  var leftWing = new Instance(indigo3Prism, new Vertex(-0.9, 0.17, 0),new Vertex(90, 192, 15), new Vertex(1,0.5,0.3), 1000);
+  var rightWing = new Instance(indigo3Prism, new Vertex(0.9, 0.17, 0),new Vertex(90, -14, 15), new Vertex(1,0.5,0.3), 1000);
   var cockpit = new Instance(whiteSphere, new Vertex(0, 0.2, -1),new Vertex(-90, 0, 0), new Vertex(0.3,0.75,0.1), 1000);
   var bodyParts = [cockpit, rightWing, leftWing,  rightReactor, leftReactor, leftFlame, rightFlame];
   var instance = new Instance(lightGrey6Pyramid, new Vertex(0, 0.5, 2.5),new Vertex(90,0, 0), new Vertex(0.25, 1, 0.1), 1000, bodyParts);
   var lightPosition = add(instance.position, new Vertex(0,-0.5,-0.4));
   var light = new Light(lightType.POINT, 0.2, lightPosition , null, vertexFromRGBA(colors.ORANGE));
-  var player = new GameEntity("Player", instance, light, 100, 10, 1 ,2 );
+  var player = new GameEntity("Player", instance, light, 100, 10, 1 ,1 );
   return player;
 }
 function createDrone(position) {
@@ -289,7 +290,7 @@ function createCaster(position) {
   var cockpit = new Instance(cyanSphere, new Vertex(0, 1, 0.5),new Vertex(0, 0, 0), new Vertex(0.35,1.2,1.2), 0);
   var bodyParts = [leftSpoiler, rightSpoiler, leftBody, rightBody, cockpit];
   var instance = new Instance(cornFlowerCube, position, new Vertex(0,0, 0), new Vertex(0.25, 0.075, 0.075), 1000, bodyParts);
-  var caster = new GameEntity("Caster", instance, null, 5, 180);
+  var caster = new GameEntity("Caster", instance, null, 10, 180);
   return caster;
 }
 function createHunter(position) {
@@ -302,7 +303,7 @@ function createHunter(position) {
   var cockpit = new Instance(lightIndigoSphere, new Vertex(0, 0.5, -0.7),new Vertex(0, 0, 0), new Vertex(0.35,0.2,1), 0);
   var bodyParts = [gun, leftWing, rightWing, cockpit];
   var instance = new Instance(darkGrey6Prism, position, new Vertex(90,0, 0), new Vertex(0.2, 0.9, 0.1), 1000, bodyParts);
-  var hunter = new GameEntity("Hunter", instance, null, 3, 120);
+  var hunter = new GameEntity("Hunter", instance, null, 10, 120);
   return hunter;
 }
 function createCarrier(position, type) {
@@ -319,13 +320,13 @@ function createCarrier(position, type) {
     var cockpit = new Instance(whiteSphere, new Vertex(0, 0, -1.1),new Vertex(0, 0, 0), new Vertex(0.5,0.5,0.4), 0);
     var bodyParts = [cockpit,forwardBody, TRWing, TLWing, BRWing, BLWing];
     var instance = new Instance(greyCube, position, new Vertex(0,0, 0), new Vertex(0.15, 0.15, 0.15), 1000, bodyParts);
-    var carrier = new GameEntity("buffCarrier", instance, null, 1, 120);
+    var carrier = new GameEntity("buffCarrier", instance, null, 3, 120);
     return carrier;
   } else if (type == "Health") {
     var cockpit = new Instance(greenYellowSphere, new Vertex(0, 0, -1.1),new Vertex(0, 0, 0), new Vertex(0.5,0.5,0.4), 0);
     var bodyParts = [cockpit,forwardBody, TRWing, TLWing, BRWing, BLWing];
     var instance = new Instance(greyCube, position, new Vertex(0,0, 0), new Vertex(0.15, 0.15, 0.15), 1000, bodyParts);
-    var carrier = new GameEntity("healthCarrier", instance, null, 1, 120);
+    var carrier = new GameEntity("healthCarrier", instance, null, 3, 120);
     return carrier;
   }
   
@@ -360,7 +361,7 @@ function createBuff(position, type) {
       return buff;
     }
     case "FR" : {
-      var arrowTip = new Instance(darkOrange3Prism, new Vertex(0,0.3,-1), new Vertex(0,90, 90), new Vertex(0.4, 2, 0.6), -1);
+      var arrowTip = new Instance(darkOrange3Prism, new Vertex(0,0.3,-1), new Vertex(0,90, 90  ), new Vertex(0.4, 2, 0.6), -1);
       var verticalBar = new Instance(darkOrangeCube, new Vertex(0,0,0), new Vertex(0,0, 0), new Vertex(0.2, 0.4, 1), -1);
       var bodyParts = [verticalBar, arrowTip];
       var instance = new Instance(cyanSphere, position, new Vertex(0,180, 0), new Vertex(0.2, 0.2, 0.2), -1, bodyParts);
@@ -369,5 +370,15 @@ function createBuff(position, type) {
       return buff;
     }
   } 
-  
+}
+function createBoss() {
+  var topLeftWing = new Instance(darkGrey3Prism, new Vertex(-0.8, 0.17, -0.5),new Vertex(90, 190,-45), new Vertex(1.25,0.2,0.3), 1000);
+  var bottomLeftWing = new Instance(darkGrey3Prism, new Vertex(-0.8, 0.17, 0.5),new Vertex(90, 190,45), new Vertex(1.25,0.2,0.3), 1000);
+  var topRightWing = new Instance(darkGrey3Prism, new Vertex(0.8, 0.17, -0.5),new Vertex(90, -10, -45), new Vertex(1.25,0.2,0.3), 1000);
+  var bottomRightWing = new Instance(darkGrey3Prism, new Vertex(0.8, 0.17, 0.5),new Vertex(90, -10, 45), new Vertex(1.25,0.2,0.3), 1000);
+  var cockpit = new Instance(darkRedSphere, new Vertex(0, 0.2, -1),new Vertex(-90, 0, 0), new Vertex(0.3,0.5,0.1), 1000);
+  var bodyParts = [cockpit, topRightWing, bottomRightWing, topLeftWing, bottomLeftWing];
+  var instance = new Instance(lightGrey6Pyramid, new Vertex(0, 0.35, 21),new Vertex(90,0, 180), new Vertex(0.75, 3, 0.3), 1000, bodyParts);
+  var player = new GameEntity("Boss", instance, null, 500, 15, 1 ,1 );
+  return player;
 }

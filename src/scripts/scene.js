@@ -44,10 +44,17 @@ var enemyProjectiles = [];
 var buffs = [];
 var globalFrameCount = 0;
 var player = createPlayer();
+var boss = null;
 var gameOver = false;
 var realFPS = 0;
 var lastLoop = (new Date()).getMilliseconds();
 var count = 1;
+var arrayEndFrame = 0;
+var timeoutFrames = 0;
+var currentDifficulty = 0;
+var sequenceLength = 40;
+var enemiesSequence = generateEnemySequence(currentDifficulty, sequenceLength);
+var sequenceIndex = sequenceLength;
 //------------------------------------------------------------------------------------------------//
 //                                      Scenes Rendering                                          //
 //------------------------------------------------------------------------------------------------//
@@ -66,30 +73,46 @@ function frameLoop() {
         globalFrameCount++;
         then = now - (elapsed % fpsInterval);
         clearBuffers(mainCanvas);
-        let playerPosX = player.instance.position.x + playerTranslate.x;
-        let playerAngleY = player.instance.rotation.y + playerRotate.y;
-        if (playerPosX > -1.45 && playerPosX < 1.45) {
-            player.instance.translate(playerTranslate);
-            if (player.lights!= null) {
-            player.lights.translate(playerTranslate);
+        // Enemy generation
+        if (boss == null) {
+            if (sequenceIndex == -1) {
+                arrayEndFrame = frames;
+                timeoutFrames++;
+                if (timeoutFrames > 120 || currentDifficulty == 1) {
+                    timeoutFrames = 0;
+                    sequenceIndex = 0;
+                }
+            } else if (enemiesSequence.length == sequenceIndex) {
+                if (enemies.length == 0) {
+                    sequenceIndex = -1;
+                    currentDifficulty++;
+                    if (currentDifficulty != 4) {
+                        enemiesSequence = generateEnemySequence(currentDifficulty, sequenceLength);
+                    } else {
+                        boss = createBoss();
+                        enemies.push(boss);
+                    }
+                }
+            } else {
+                if ( globalFrameCount % 30 == 0) {
+                    enemies = generateEnemies(enemies, enemiesSequence, sequenceIndex);
+                    sequenceIndex++;
+                }
             }
-        }
-        if (playerAngleY >= -20 && playerAngleY <= 20 && playerRotate.y != 0){
-            player.instance.rotate(new Vertex(0, playerRotate.y, 0));
+            enemies = animateEnemies(enemies);
         } else {
-            if (playerAngleY < 0 && playerRotate.y == 0) {
-            player.instance.rotate(new Vertex(0,20*speed,0));
-            } else if (playerAngleY > 0 && playerRotate.y == 0) {
-            player.instance.rotate(new Vertex(0,-20*speed,0));
-            }
+            if (boss.hp >0) {
+                boss = animateBoss(boss);
+            } else {
+                currentDifficulty++
+            } 
         }
-        player.instance.rotate(new Vertex(0, 0, playerRotate.z));
-
-        enemies = animateEnemies(enemies, globalFrameCount);
+        // Animations
         buffs = animateBuffs(buffs);
+        player = animatePlayer(player);
         playerProjectiles  = animatePlayerProjectiles(playerProjectiles, player);
         enemyProjectiles  = animateEnemyProjectiles(enemyProjectiles, enemies);
-
+        // Collision checks
         [enemies, playerProjectiles, player, buffs] = checkEnemiesDamage(enemies,playerProjectiles,player, buffs);
         [player, enemyProjectiles, enemies] = checkPlayerDamage(player,enemyProjectiles, enemies);
         [player, buffs] = checkBuffsCollision(player, buffs);
@@ -147,9 +170,9 @@ function frameLoop() {
         mainCanvas.buffer = mainCanvas.context.getImageData(0, 0, canvas.width, canvas.height);
         renderScene(foregroundDynamic,mainCanvas);
         updateCanvas(mainCanvas);
-        updateHUD(mainCanvas, realFPS, player);
+        updateHUD(mainCanvas, realFPS, player, currentDifficulty, enemies);
     }
-    if (player.hp>0) {
+    if (player.hp>0 && (currentDifficulty < 5 || enemies.length != 0)) {
         requestAnimationFrame(frameLoop);
     }
 }

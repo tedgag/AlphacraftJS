@@ -207,6 +207,9 @@ function vertexFromRGBA(color) {
         return new Vertex(color[0]/255, color[1]/255, color[2]/255, 1);
     }
 }
+function getRandomInt(max) {
+    return Math.floor(Math.random() * Math.floor(max));
+}
 //------------------------------------------------------------------------//
 //                        Transformation Matrices                         //
 //------------------------------------------------------------------------//
