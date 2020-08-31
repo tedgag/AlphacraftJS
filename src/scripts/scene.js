@@ -44,6 +44,7 @@ var enemyProjectiles = [];
 var buffs = [];
 var globalFrameCount = 0;
 var player = createPlayer();
+var score = 0;
 var boss = null;
 var gameOver = false;
 var realFPS = 0;
@@ -78,7 +79,7 @@ function frameLoop() {
             if (sequenceIndex == -1) {
                 arrayEndFrame = frames;
                 timeoutFrames++;
-                if (timeoutFrames > 120 || currentDifficulty == 1) {
+                if (timeoutFrames > 90 || currentDifficulty == 1) {
                     timeoutFrames = 0;
                     sequenceIndex = 0;
                 }
@@ -87,7 +88,9 @@ function frameLoop() {
                     sequenceIndex = -1;
                     currentDifficulty++;
                     if (currentDifficulty != 4) {
-                        enemiesSequence = generateEnemySequence(currentDifficulty, sequenceLength);
+                        enemiesSequence = generateEnemySequence(
+                            currentDifficulty, 
+                            sequenceLength);
                     } else {
                         boss = createBoss();
                         enemies.push(boss);
@@ -113,8 +116,17 @@ function frameLoop() {
         playerProjectiles  = animatePlayerProjectiles(playerProjectiles, player);
         enemyProjectiles  = animateEnemyProjectiles(enemyProjectiles, enemies);
         // Collision checks
-        [enemies, playerProjectiles, player, buffs] = checkEnemiesDamage(enemies,playerProjectiles,player, buffs);
-        [player, enemyProjectiles, enemies] = checkPlayerDamage(player,enemyProjectiles, enemies);
+        [enemies, playerProjectiles, player, buffs, score] = checkEnemiesDamage(
+            enemies,
+            playerProjectiles,
+            player, 
+            buffs, 
+            score);
+        [player, enemyProjectiles, enemies, score] = checkPlayerDamage(
+            player,
+            enemyProjectiles, 
+            enemies,
+            score);
         [player, buffs] = checkBuffsCollision(player, buffs);
 
         let newLights = lights.slice();
@@ -170,7 +182,7 @@ function frameLoop() {
         mainCanvas.buffer = mainCanvas.context.getImageData(0, 0, canvas.width, canvas.height);
         renderScene(foregroundDynamic,mainCanvas);
         updateCanvas(mainCanvas);
-        updateHUD(mainCanvas, realFPS, player, currentDifficulty, enemies);
+        updateHUD(mainCanvas, realFPS, player, currentDifficulty, enemies, score);
     }
     if (player.hp>0 && (currentDifficulty < 5 || enemies.length != 0)) {
         requestAnimationFrame(frameLoop);

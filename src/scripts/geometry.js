@@ -1,6 +1,6 @@
-//------------------------------------------------------------------------//
-//                     Linear algebra and helpers                         //
-//------------------------------------------------------------------------//
+//------------------------------------------------------------------------------------------------//
+//                                       Linear Algebra                                           //
+//------------------------------------------------------------------------------------------------//
 function add(v1, v2) {
     return new Vertex(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z);
 }
@@ -146,6 +146,14 @@ function planeIntersection(a,b, plane) {
 function computeAttribute(alphaA,alphaB,t) {
     return add(alphaA, multiply(t, subtract(alphaA, alphaB)));
 }
+
+function vectorLength(vec) {
+    return Math.sqrt(Math.pow(vec.x, 2) + Math.pow(vec.y,2) + Math.pow(vec.z, 2));
+}
+
+//------------------------------------------------------------------------------------------------//
+//                                     Helper Functions                                           //
+//------------------------------------------------------------------------------------------------//
 function sortIndices(indices, vertices) {
     var i0 = 0;
     var i1 = 1; 
@@ -167,9 +175,6 @@ function sortIndices(indices, vertices) {
         i2 = i; 
     }
     return [i0,i1,i2];
-}
-function vectorLength(vec) {
-    return Math.sqrt(Math.pow(vec.x, 2) + Math.pow(vec.y,2) + Math.pow(vec.z, 2));
 }
 function clamp(value) {
     if (value < 0) { return 0; }
@@ -210,9 +215,9 @@ function vertexFromRGBA(color) {
 function getRandomInt(max) {
     return Math.floor(Math.random() * Math.floor(max));
 }
-//------------------------------------------------------------------------//
-//                        Transformation Matrices                         //
-//------------------------------------------------------------------------//
+//------------------------------------------------------------------------------------------------//
+//                                   Transformation Matrices                                      //
+//------------------------------------------------------------------------------------------------//
 
 // Translation matrix to the given position vector
 function makeTranslationMatrix(position) {

@@ -1,6 +1,6 @@
-//------------------------------------------------------------------------//
-//                                 Enums                                  //
-//------------------------------------------------------------------------//
+//------------------------------------------------------------------------------------------------//
+//                                          Enums                                                 //
+//------------------------------------------------------------------------------------------------//
 const colors = {
         RED : [255, 0, 0],
         DARKRED : [155, 0, 0],
@@ -30,9 +30,9 @@ const colors = {
         DIRECTIONAL : "directional"
     }
 
-//------------------------------------------------------------------------//
-//                                Classes                                 //
-//------------------------------------------------------------------------//
+//------------------------------------------------------------------------------------------------//
+//                                          Classes                                               //
+//------------------------------------------------------------------------------------------------//
 class Vertex {
 constructor(x,y,z=0,w=1) {
     this.x=x;
@@ -247,4 +247,25 @@ class Projectile {
         this.damage = damage;
         this.speed = speed;
     }
+}
+class Sound {
+    constructor(src) {
+        this.sound = document.createElement("audio");
+        this.sound.src = src;
+        this.sound.setAttribute("preload", "auto");
+        this.sound.setAttribute("controls", "none");
+        this.sound.style.display = "none";
+        window.onload = () => {
+            document.body.appendChild(this.sound);
+        };
+        
+    }
+    play() {
+        this.sound.currentTime = 0
+        this.sound.play();
+    }
+    pause() {
+        this.sound.pause();
+    }
+
 }

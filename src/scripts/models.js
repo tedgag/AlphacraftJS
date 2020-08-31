@@ -1,6 +1,6 @@
-//------------------------------------------------------------------------//
-//                          Geometrical Models                            //
-//------------------------------------------------------------------------//
+//------------------------------------------------------------------------------------------------//
+//                                   Geometrical Models                                           //
+//------------------------------------------------------------------------------------------------//
 function createCubeModel(color, texture) {
   color = vertexFromRGBA(color);
   var vertices = [
@@ -125,8 +125,16 @@ function createPyramidModel(sides, color) {
   }
   var normalAngle = toRad(360 - angle/2);
   var sideNormal = new Vertex(Math.cos(normalAngle), 1, Math.sin(normalAngle));
-  triangles.push(new Triangle([0, vertices.length-1, 2], baseNormals, UVs, color));
-  triangles.push(new Triangle([vertices.length-1, 1, 2], [sideNormal, sideNormal, sideNormal], UVs, color));
+  triangles.push(new Triangle(
+    [0, vertices.length-1, 2], 
+    baseNormals, 
+    UVs, 
+    color));
+  triangles.push(new Triangle(
+    [vertices.length-1, 1, 2], 
+    [sideNormal, sideNormal, sideNormal], 
+    UVs, 
+    color));
 
   return new Model("Pyramid", vertices, triangles);
 }
@@ -147,8 +155,16 @@ function createPrismModel(sides, color) {
   let UVs = [new Vertex(0, 0, 0), new Vertex(0, 0, 0), new Vertex(0, 0, 0)];
 
   for (var i=2; i<sides*2; i+=2) {
-    vertices.push(new Vertex(Math.cos(toRad(angle*(i/2))), 0, Math.sin(toRad(angle*(i/2))))); // i+2
-    vertices.push(new Vertex(Math.cos(toRad(angle*(i/2))), 1, Math.sin(toRad(angle*(i/2))))); // i+3
+    // i+2
+    vertices.push(new Vertex(
+      Math.cos(toRad(angle*(i/2))), 
+      0, 
+      Math.sin(toRad(angle*(i/2))))); 
+    // i+3
+    vertices.push(new Vertex(
+      Math.cos(toRad(angle*(i/2))), 
+      1, 
+      Math.sin(toRad(angle*(i/2))))); 
     triangles.push(new Triangle([0, i, i+2], bottomBaseNormals, UVs, color));
     triangles.push(new Triangle([1, i+3, i+1], topBaseNormals, UVs, color));
     let normalAngle = toRad((angle*(i/2) - angle*(i/2-1))/2 + angle*(i/2-1));
@@ -160,9 +176,16 @@ function createPrismModel(sides, color) {
   var sideNormal = new Vertex(Math.cos(normalAngle), 0, Math.sin(normalAngle));
   triangles.push(new Triangle([0, vertices.length-2, 2], bottomBaseNormals, UVs, color));
   triangles.push(new Triangle([1, 3, vertices.length-1], topBaseNormals, UVs, color));
-  triangles.push(new Triangle([vertices.length-2, vertices.length-1, 2], [sideNormal, sideNormal, sideNormal], UVs, color));
-  triangles.push(new Triangle([ vertices.length-1, 3, 2], [sideNormal, sideNormal, sideNormal], UVs, color));
-
+  triangles.push(new Triangle(
+    [vertices.length-2, vertices.length-1, 2], 
+    [sideNormal, sideNormal, sideNormal], 
+    UVs, 
+    color));
+  triangles.push(new Triangle(
+    [ vertices.length-1, 3, 2], 
+    [sideNormal, sideNormal, sideNormal], 
+    UVs, 
+    color));
   return new Model("Prism", vertices, triangles);
 }
 // #TODO Compute UVs for textures
@@ -245,35 +268,139 @@ var darkOrange3Prism = createPrismModel(3, colors.DARKORANGE);
 var lightIndigo6Prism = createPrismModel(6, colors.LIGHTINDIGO );
 var darkGrey6Prism = createPrismModel(6, colors.DARKGREY);
 var darkGrey3Prism = createPrismModel(3, colors.DARKGREY);
-//------------------------------------------------------------------------//
-//                           Complex Models                               //
-//------------------------------------------------------------------------//
+//------------------------------------------------------------------------------------------------//
+//                                      Complex Models                                            //
+//------------------------------------------------------------------------------------------------//
 function createPlayer() {
-  var leftFlame = new Instance(orangeSphere, new Vertex(-0.4, -0.05, -0.1),new Vertex(0, 0, 0), new Vertex(0.15,0.05,0.3), -1);
-  var rightFlame = new Instance(orangeSphere, new Vertex(0.4, -0.05, -0.1),new Vertex(0, 0, 0), new Vertex(0.15,0.05,0.3), -1);
-  var rightReactor = new Instance(grey8Prism, new Vertex(0.4, -0.05, -0.1),new Vertex(0, 0, 0), new Vertex(0.25,0.05,0.5), 1000);
-  var leftReactor = new Instance(grey8Prism, new Vertex(-0.4, -0.05, -0.1),new Vertex(0, 0, 0), new Vertex(0.25,0.05,0.5), 1000);
-  var leftWing = new Instance(indigo3Prism, new Vertex(-0.9, 0.17, 0),new Vertex(90, 192, 15), new Vertex(1,0.5,0.3), 1000);
-  var rightWing = new Instance(indigo3Prism, new Vertex(0.9, 0.17, 0),new Vertex(90, -14, 15), new Vertex(1,0.5,0.3), 1000);
-  var cockpit = new Instance(whiteSphere, new Vertex(0, 0.2, -1),new Vertex(-90, 0, 0), new Vertex(0.3,0.75,0.1), 1000);
+  /* new Instance(
+    model,
+    position,
+    rotation,
+    scaling,
+    reflectivity,
+    children
+  )*/
+  var leftFlame = new Instance(
+    orangeSphere, 
+    new Vertex(-0.4, -0.05, -0.1),
+    new Vertex(0, 0, 0), 
+    new Vertex(0.15,0.05,0.3), 
+    -1);
+  var rightFlame = new Instance(
+    orangeSphere, 
+    new Vertex(0.4, -0.05, -0.1),
+    new Vertex(0, 0, 0), 
+    new Vertex(0.15,0.05,0.3), 
+    -1);
+  var rightReactor = new Instance(
+    grey8Prism, 
+    new Vertex(0.4, -0.05, -0.1),
+    new Vertex(0, 0, 0), 
+    new Vertex(0.25,0.05,0.5), 
+    1000);
+  var leftReactor = new Instance(
+    grey8Prism, 
+    new Vertex(-0.4, -0.05, -0.1),
+    new Vertex(0, 0, 0), 
+    new Vertex(0.25,0.05,0.5), 
+    1000);
+  var leftWing = new Instance(
+    indigo3Prism, 
+    new Vertex(-0.9, 0.17, 0),
+    new Vertex(90, 192, 15), 
+    new Vertex(1,0.5,0.3), 
+    1000);
+  var rightWing = new Instance(
+    indigo3Prism, 
+    new Vertex(0.9, 0.17, 0),
+    new Vertex(90, -14, 15), 
+    new Vertex(1,0.5,0.3), 
+    1000);
+  var cockpit = new Instance(
+    whiteSphere, 
+    new Vertex(0, 0.2, -1),
+    new Vertex(-90, 0, 0), 
+    new Vertex(0.3,0.75,0.1), 
+    1000);
+
   var bodyParts = [cockpit, rightWing, leftWing,  rightReactor, leftReactor, leftFlame, rightFlame];
-  var instance = new Instance(lightGrey6Pyramid, new Vertex(0, 0.5, 2.5),new Vertex(90,0, 0), new Vertex(0.25, 1, 0.1), 1000, bodyParts);
+
+  var instance = new Instance(
+    lightGrey6Pyramid, 
+    new Vertex(0, 0.5, 2.5),
+    new Vertex(90,0, 0), 
+    new Vertex(0.25, 1, 0.1), 
+    1000, 
+    bodyParts);
   var lightPosition = add(instance.position, new Vertex(0,-0.5,-0.4));
   var light = new Light(lightType.POINT, 0.2, lightPosition , null, vertexFromRGBA(colors.ORANGE));
-  var player = new GameEntity("Player", instance, light, 100, 10, 1 ,1 );
+  /* new GameEntity(
+    name,
+    instance,
+    light,
+    hp,
+    attackDelay,
+    projDamage,
+    projCount
+  )*/
+  var player = new GameEntity("Player", instance, light, 100, 10, 1, 1);
   return player;
 }
 function createDrone(position) {
-  //var flame = new Instance(indigo8Prism, new Vertex(0, 1, 0),new Vertex(0, 0, 0), new Vertex(0.75,0.5,0.75), -1);
-  var reactor = new Instance(grey8Prism, new Vertex(0, 0, 0.75),new Vertex(90, 0, 0), new Vertex(0.4,0.4,0.4), 1000);
-  var gun = new Instance(grey8Prism, new Vertex(0, -0.35, -1.1),new Vertex(90, 0, 0), new Vertex(0.2,0.2,0.2), 1000);
-  var leftWingTip = new Instance(grey3Prism, new Vertex(0.75, 0, -0.45),new Vertex(0,90, 0), new Vertex(1,1,0.3), 1000);
-  var leftWing = new Instance(grey3Prism, new Vertex(-1, -0.27, 0),new Vertex(0, 0, 205), new Vertex(1.5,0.2,0.7), 1000, [leftWingTip]);
-  var rightWingTip = new Instance(grey3Prism, new Vertex(0.75, 0, -0.45),new Vertex(0,90, 0), new Vertex(1,1,0.3), 1000);
-  var rightWing = new Instance(grey3Prism, new Vertex(1, -0.5, 0),new Vertex(0, 0, -30), new Vertex(1.5,0.2,0.7), 1000, [rightWingTip]);
-  var cockpit = new Instance(darkRedSphere, new Vertex(0, 0.3, -0.6),new Vertex(0, 0, 0), new Vertex(0.7,0.2,0.4), 0);
+  var reactor = new Instance(
+    grey8Prism, 
+    new Vertex(0, 0, 0.75),
+    new Vertex(90, 0, 0), 
+    new Vertex(0.4,0.4,0.4), 
+    1000);
+  var gun = new Instance(
+    grey8Prism, 
+    new Vertex(0, -0.35, -1.1),
+    new Vertex(90, 0, 0), 
+    new Vertex(0.2,0.2,0.2), 
+    1000);
+  var leftWingTip = new Instance(
+    grey3Prism, 
+    new Vertex(0.75, 0, -0.45),
+    new Vertex(0,90, 0), 
+    new Vertex(1,1,0.3), 
+    1000);
+  var leftWing = new Instance(
+    grey3Prism, 
+    new Vertex(-1, -0.27, 0),
+    new Vertex(0, 0, 205), 
+    new Vertex(1.5,0.2,0.7), 
+    1000, 
+    [leftWingTip]);
+  var rightWingTip = new Instance(
+    grey3Prism, 
+    new Vertex(0.75, 0, -0.45),
+    new Vertex(0,90, 0), 
+    new Vertex(1,1,0.3), 
+    1000);
+  var rightWing = new Instance(
+    grey3Prism, 
+    new Vertex(1, -0.5, 0),
+    new Vertex(0, 0, -30), 
+    new Vertex(1.5,0.2,0.7), 
+    1000, 
+    [rightWingTip]);
+  var cockpit = new Instance(
+    darkRedSphere, 
+    new Vertex(0, 0.3, -0.6),
+    new Vertex(0, 0, 0), 
+    new Vertex(0.7,0.2,0.4), 
+    0);
+
   var bodyParts = [leftWing, rightWing, cockpit, gun,reactor];
-  var instance = new Instance(lightGreySphere, position,new Vertex(0,0, 0), new Vertex(0.25, 0.25, 0.4), 1000, bodyParts);
+
+  var instance = new Instance(
+    lightGreySphere, 
+    position,
+    new Vertex(0,0, 0), 
+    new Vertex(0.25, 0.25, 0.4), 
+    1000, 
+    bodyParts);
   var drone = new GameEntity("Drone", instance, null, 5, 60);
   return drone;
 }
@@ -372,13 +499,44 @@ function createBuff(position, type) {
   } 
 }
 function createBoss() {
-  var topLeftWing = new Instance(darkGrey3Prism, new Vertex(-0.8, 0.17, -0.5),new Vertex(90, 190,-45), new Vertex(1.25,0.2,0.3), 1000);
-  var bottomLeftWing = new Instance(darkGrey3Prism, new Vertex(-0.8, 0.17, 0.5),new Vertex(90, 190,45), new Vertex(1.25,0.2,0.3), 1000);
-  var topRightWing = new Instance(darkGrey3Prism, new Vertex(0.8, 0.17, -0.5),new Vertex(90, -10, -45), new Vertex(1.25,0.2,0.3), 1000);
-  var bottomRightWing = new Instance(darkGrey3Prism, new Vertex(0.8, 0.17, 0.5),new Vertex(90, -10, 45), new Vertex(1.25,0.2,0.3), 1000);
-  var cockpit = new Instance(darkRedSphere, new Vertex(0, 0.2, -1),new Vertex(-90, 0, 0), new Vertex(0.3,0.5,0.1), 1000);
+  var topLeftWing = new Instance(
+    darkGrey3Prism, 
+    new Vertex(-0.8, 0.17, -0.5),
+    new Vertex(90, 190,-45), 
+    new Vertex(1.25,0.2,0.3), 
+    1000);
+  var bottomLeftWing = new Instance(
+    darkGrey3Prism, 
+    new Vertex(-0.8, 0.17, 0.5),
+    new Vertex(90, 190,45), 
+    new Vertex(1.25,0.2,0.3), 
+    1000);
+  var topRightWing = new Instance(
+    darkGrey3Prism, 
+    new Vertex(0.8, 0.17, -0.5),
+    new Vertex(90, -10, -45), 
+    new Vertex(1.25,0.2,0.3), 
+    1000);
+  var bottomRightWing = new Instance(
+    darkGrey3Prism, 
+    new Vertex(0.8, 0.17, 0.5),
+    new Vertex(90, -10, 45), 
+    new Vertex(1.25,0.2,0.3), 
+    1000);
+  var cockpit = new Instance(
+    darkRedSphere, 
+    new Vertex(0, 0.2, -1),
+    new Vertex(-90, 0, 0), 
+    new Vertex(0.3,0.5,0.1), 
+    1000);
   var bodyParts = [cockpit, topRightWing, bottomRightWing, topLeftWing, bottomLeftWing];
-  var instance = new Instance(lightGrey6Pyramid, new Vertex(0, 0.35, 21),new Vertex(90,0, 180), new Vertex(0.75, 3, 0.3), 1000, bodyParts);
-  var player = new GameEntity("Boss", instance, null, 500, 15, 1 ,1 );
+  var instance = new Instance(
+    lightGrey6Pyramid, 
+    new Vertex(0, 0.35, 21),
+    new Vertex(90,0, 180), 
+    new Vertex(0.75, 3, 0.3), 
+    1000, 
+    bodyParts);
+  var player = new GameEntity("Boss", instance, null, 500, 10, 1 ,);
   return player;
 }

@@ -8,7 +8,29 @@ var shoot = false;
 
 // Laser projectile
 var laserFrameCount = 0;
-
+//Sounds 
+var playerLaser = new Sound("resources/sounds/player_laser.wav");
+playerLaser.sound.volume = 0.025;
+var droneLaser = new Sound("resources/sounds/drone_laser.wav");
+droneLaser.sound.volume = 0.05;
+var casterLaser = new Sound("resources/sounds/caster_laser.wav");
+casterLaser.sound.volume = 0.05;
+var hunterLaser = new Sound("resources/sounds/hunter_laser.wav");
+hunterLaser.sound.volume = 0.05;
+var healSound = new Sound("resources/sounds/heal.wav");
+healSound.sound.volume = 0.1;
+var buffSound = new Sound("resources/sounds/upgrade.wav");
+buffSound.sound.volume = 0.1;
+var explosionSound1 = new Sound("resources/sounds/explosion1.wav");
+explosionSound1.sound.volume = 0.025;
+var explosionSound2 = new Sound("resources/sounds/explosion2.wav");
+explosionSound2.sound.volume = 0.025;
+var explosionSound3 = new Sound("resources/sounds/explosion3.wav");
+explosionSound3.sound.volume = 0.025;
+var disableSound = new Sound("resources/sounds/electric.wav");
+disableSound.sound.volume = 0.2;
+var defeatSound = new Sound("resources/sounds/defeat.wav");
+defeatSound.sound.volume = 0.1;
 function handleKeyPress(event) {
     if(event.keyCode == 37) {
         playerTranslate.x = -speed;
@@ -41,20 +63,25 @@ document.addEventListener('keyup', handleKeyRelease, true);
 //------------------------------------------------------------------------------------------------//
 //                                         Animations                                             //
 //------------------------------------------------------------------------------------------------//
-// Limiting frame rate to 60 fps
+// Limiting frame rate to 30 fps
 var stop = false;
 var fps =  30;
 var fpsInterval, startTime, now, then, elapsed;
 
+fpsInterval = 1000 / fps;
+then = Date.now();
+startTime = then;
+
+// Player statuses
 var attackDisableTimeout = 0;
 var playerCanShoot = true;
 
 var movementDisableTimeout = 0;
 var playerCanMove =  true;
-fpsInterval = 1000 / fps;
-then = Date.now();
-startTime = then;
 
+
+// Boss movements. true = right, false = left
+var bossTranslateDirection = false;
 
 
 function generateEnemySequence(difficulty, length) {
@@ -73,9 +100,9 @@ function generateEnemySequence(difficulty, length) {
             oddsArray[2] = 0.2;
             break;
         case 3:
-            oddsArray[0] = 0.5;
-            oddsArray[1] = 0.2;
-            oddsArray[2] = 0.3;
+            oddsArray[0] = 0.6;
+            oddsArray[1] = 0.15;
+            oddsArray[2] = 0.25;
             break;
     }
     
@@ -215,19 +242,18 @@ function animatePlayer (player) {
     return player;
         
 }
-// true = right, false = left
-var translateDirection = false;
+
 function animateBoss(boss) {
     if (boss.instance.position.z > 15) {
         boss.instance.translate(new Vertex(0,0,-0.075));
     } else {
-        if (translateDirection) {
+        if (bossTranslateDirection) {
             let bossPosX = boss.instance.position.x + 0.025;
             let bossAngleY = boss.instance.rotation.y - 1;
             if (bossPosX < 1.45 ) {
                 boss.instance.translate(new Vertex(0.025, 0,0));
             } else {
-                translateDirection = false;
+                bossTranslateDirection = false;
                 boss.instance.translate(new Vertex(-0.025, 0,0));
             }
             if (bossAngleY >= -10) {
@@ -239,7 +265,7 @@ function animateBoss(boss) {
             if (bossPosX > -1.45 ) {
                 boss.instance.translate(new Vertex(-0.025, 0,0));
             } else {
-                translateDirection = true;
+                bossTranslateDirection = true;
                 boss.instance.translate(new Vertex(0.025, 0,0));
             }
             if (bossAngleY <= 10) {
@@ -269,6 +295,7 @@ function animateBuffs(buffs){
 function animateEnemyProjectiles(projectilesArray, enemyArray) {
     var enemies = enemyArray;
     var projectiles = projectilesArray;
+ 
     for (let i=0; i<enemies.length; i++) {
         let shoot = true;
         let enemyPosX = enemies[i].instance.position.x;
@@ -303,6 +330,7 @@ function animateEnemyProjectiles(projectilesArray, enemyArray) {
                             vertexFromRGBA(colors.RED)
                         );
                         projectiles.push(new Projectile("Normal", projInstance, projLight, 2, 0.2));
+                        droneLaser.play();
                         break;
                     }
                     case "Hunter": {
@@ -320,7 +348,12 @@ function animateEnemyProjectiles(projectilesArray, enemyArray) {
                             null, 
                             vertexFromRGBA(colors.INDIGO)
                         );
-                        projectiles.push(new Projectile("MovementDisable", projInstance, projLight, 7, 0.1));
+                        projectiles.push(new Projectile(
+                            "MovementDisable",
+                            projInstance,
+                            projLight,
+                            7, 0.2));
+                        hunterLaser.play();
                         break;
                     }
                     case "Caster": {
@@ -338,7 +371,13 @@ function animateEnemyProjectiles(projectilesArray, enemyArray) {
                             null, 
                             vertexFromRGBA(colors.CYAN)
                         );
-                        projectiles.push(new Projectile("ShootDisable", projInstance, projLight, 15, 0.1));
+                        projectiles.push(new Projectile(
+                            "ShootDisable", 
+                            projInstance, 
+                            projLight, 
+                            15, 
+                            0.1));
+                        casterLaser.play();
                         break;
                     }
                     case "Boss" : {
@@ -357,7 +396,13 @@ function animateEnemyProjectiles(projectilesArray, enemyArray) {
                                 null, 
                                 vertexFromRGBA(colors.CYAN)
                             );
-                            projectiles.push(new Projectile("ShootDisable", projInstance, projLight, 10, 0.1));
+                            projectiles.push(new Projectile(
+                                "ShootDisable", 
+                                projInstance, 
+                                projLight, 
+                                10, 
+                                0.1));
+                            casterLaser.play();
                             break;
                         } else if (enemies[i].frameCount % (enemies[i].attackDelay * 13) == 0){
                             let projInstance = new Instance (
@@ -374,7 +419,12 @@ function animateEnemyProjectiles(projectilesArray, enemyArray) {
                                 null, 
                                 vertexFromRGBA(colors.INDIGO)
                             );
-                            projectiles.push(new Projectile("MovementDisable", projInstance, projLight, 5, 0.3));
+                            projectiles.push(new Projectile("MovementDisable", 
+                                projInstance, 
+                                projLight, 
+                                7, 
+                                0.2));
+                            hunterLaser.play();
                             break;
                         }
                         let projInstance = new Instance (
@@ -391,7 +441,13 @@ function animateEnemyProjectiles(projectilesArray, enemyArray) {
                             null, 
                             vertexFromRGBA(colors.RED)
                         );
-                        projectiles.push(new Projectile("Normal", projInstance, projLight, 2, 0.2));
+                        projectiles.push(new Projectile(
+                            "Normal", 
+                            projInstance, 
+                            projLight, 
+                            2, 
+                            0.2));
+                        droneLaser.play();
                         break;
                         
                     }
@@ -417,14 +473,21 @@ function animateEnemyProjectiles(projectilesArray, enemyArray) {
 
 var lastPlayerShot = 0;
 
+
 function animatePlayerProjectiles(projectiles, player) {
     var playerPosX = player.instance.position.x;
     if (playerCanShoot) {
         if (shoot) {  
+            //Sounds
+            
             if (lastPlayerShot + player.attackDelay < player.frameCount ||
                 player.frameCount++ % player.attackDelay == 0) {
+                playerLaser.play();
                 lastPlayerShot = player.frameCount;
-                
+                let projColor = new Vertex(
+                    0, 
+                    2 - player.projDamage,
+                    player.projDamage-1);
                 switch(player.projCount) {
                     case 1:
                         var projInstance = new Instance (
@@ -434,6 +497,7 @@ function animatePlayerProjectiles(projectiles, player) {
                             new Vertex(0.02, 0.02, 0.2),
                             -1
                         );
+                        setColorShift(projInstance, projColor);
                         var projLight =  new Light(
                             lightType.POINT,
                             0.1,
@@ -457,6 +521,7 @@ function animatePlayerProjectiles(projectiles, player) {
                             new Vertex(0.02, 0.02, 0.2),
                             -1
                         );
+                        setColorShift(projInstance1, projColor);
                         var projLight1 =  new Light(
                             lightType.POINT,
                             0.1,
@@ -471,6 +536,7 @@ function animatePlayerProjectiles(projectiles, player) {
                             new Vertex(0.02, 0.02, 0.2),
                             -1
                         );
+                        setColorShift(projInstance2, projColor);
                         var projLight2 =  new Light(
                             lightType.POINT,
                             0.1,
@@ -478,9 +544,19 @@ function animatePlayerProjectiles(projectiles, player) {
                             null,
                             vertexFromRGBA(colors.GREEN)
                         );
-                        var projectile1 = new Projectile("Player", projInstance1, projLight1, player.projDamage, 0.3);
+                        var projectile1 = new Projectile(
+                            "Player",
+                            projInstance1,
+                            projLight1,
+                            player.projDamage,
+                            0.3);
                         projectiles.push(projectile1);
-                        var projectile2 = new Projectile("Player", projInstance2, projLight2, player.projDamage, 0.3);
+                        var projectile2 = new Projectile(
+                            "Player", 
+                            projInstance2, 
+                            projLight2, 
+                            player.projDamage, 
+                            0.3);
                         projectiles.push(projectile2);
                         break;
                     case 3:
@@ -491,6 +567,7 @@ function animatePlayerProjectiles(projectiles, player) {
                             new Vertex(0.02, 0.02, 0.2),
                             -1
                         );
+                        setColorShift(projInstance1, projColor);
                         var projLight1 =  new Light(
                             lightType.POINT,
                             0.1,
@@ -505,6 +582,7 @@ function animatePlayerProjectiles(projectiles, player) {
                             new Vertex(0.02, 0.02, 0.2),
                             -1
                         );
+                        setColorShift(projInstance2, projColor);
                         var projLight2 =  new Light(
                             lightType.POINT,
                             0.1,
@@ -519,6 +597,7 @@ function animatePlayerProjectiles(projectiles, player) {
                             new Vertex(0.02, 0.02, 0.2),
                             -1
                         );
+                        setColorShift(projInstance3, projColor);
                         var projLight3 =  new Light(
                             lightType.POINT,
                             0.1,
@@ -526,11 +605,26 @@ function animatePlayerProjectiles(projectiles, player) {
                             null,
                             vertexFromRGBA(colors.GREEN)
                         );
-                        var projectile1 = new Projectile("Player", projInstance1, projLight1, player.projDamage, 0.3);
+                        var projectile1 = new Projectile(
+                            "Player", 
+                            projInstance1, 
+                            projLight1, 
+                            player.projDamage, 
+                            0.3);
                         projectiles.push(projectile1);
-                        var projectile2 = new Projectile("Player", projInstance2, projLight2, player.projDamage, 0.3);
+                        var projectile2 = new Projectile(
+                            "Player", 
+                            projInstance2, 
+                            projLight2, 
+                            player.projDamage, 
+                            0.3);
                         projectiles.push(projectile2);
-                        var projectile3 = new Projectile("Player", projInstance3, projLight3, player.projDamage, 0.3);
+                        var projectile3 = new Projectile(
+                            "Player", 
+                            projInstance3, 
+                            projLight3, 
+                            player.projDamage, 
+                            0.3);
                         projectiles.push(projectile3);
                         break;
                         
@@ -584,7 +678,7 @@ function checkForCollision(instance, instanceArray) {
     
 }
 // Detect and handle damages between all enemies and the player projectiles
-function checkEnemiesDamage(enemies, projectiles, player, buffs) {
+function checkEnemiesDamage(enemies, projectiles, player, buffs, score) {
     var projectilesInstances = [];
     for (let i = 0; i<projectiles.length; i++) {
         projectilesInstances.push(projectiles[i].instance);
@@ -598,8 +692,18 @@ function checkEnemiesDamage(enemies, projectiles, player, buffs) {
                 if (enemies[i].hp <=0) {
                     let position = enemies[i].instance.position;
                     switch (enemies[i].name) {
+                        case "Drone":
+                            score+= 100;
+                            break;
+                        case "Caster":
+                            score+= 300;
+                            break;
+                        case "Hunter":
+                            score+= 400;
+                            break;
                         case "healthCarrier":
                             buffs.push(createBuff(position,"HP"));
+                            score+= 50;
                             break;
                         case "buffCarrier":
                             let type = generateBuffType(player);
@@ -608,21 +712,35 @@ function checkEnemiesDamage(enemies, projectiles, player, buffs) {
                             } else {
                                 buffs.push(createBuff(position,"HP"));
                             }
+                            score+= 50;
+                            break;
+                        case "Boss":
+                            score+= 2000;
                             break;
                     }
                     enemies.splice(i,1);
-                    
+                    switch(getRandomInt(3)){
+                        case 0:
+                            explosionSound1.play();
+                            break;
+                        case 1:
+                            explosionSound2.play();
+                            break;
+                        case 2:
+                            explosionSound3.play();
+                            break;
+                    }
                 } else {
                     setColorShift(enemies[i].instance, new Vertex(0.5 * 1/enemies[i].hp,0,0));
                 }
             }
         }
     }
-    return [enemies, projectiles, player, buffs];
+    return [enemies, projectiles, player, buffs, score];
 }
 
 // Detect and handle damages between the player and all enemies projectiles and all enemies
-function checkPlayerDamage(player, projectiles, enemies) {
+function checkPlayerDamage(player, projectiles, enemies, score) {
     var projectilesInstances = [];
     for (let i = 0; i<projectiles.length; i++) {
         projectilesInstances.push(projectiles[i].instance);
@@ -630,15 +748,17 @@ function checkPlayerDamage(player, projectiles, enemies) {
     let projIndex = checkForCollision(player.instance, projectilesInstances);
     if (projIndex!= null) {
         player.hp -= projectiles[projIndex].damage;
+        score -= projectiles[projIndex].damage;
         if (projectiles[projIndex].type == "ShootDisable") {
             playerCanShoot = false;
             attackDisableTimeout = 0;
             setColorShift(player.instance, new Vertex(0,0.25,0.25));
-        }
-        if (projectiles[projIndex].type == "MovementDisable") {
+            disableSound.play();
+        } else if (projectiles[projIndex].type == "MovementDisable") {
             playerCanMove = false;
             movementDisableTimeout = 0
             setColorShift(player.instance, new Vertex(0.25,0,0.25));
+            disableSound.play();
         }
         projectiles.splice(projIndex,1);
         
@@ -649,11 +769,23 @@ function checkPlayerDamage(player, projectiles, enemies) {
     }
     let enemyIndex = checkForCollision(player.instance, enemyInstances);
     if (enemyIndex!= null) {
+        score-= 20;
         player.hp -= 20;
         enemies.splice(enemyIndex,1);
+        switch(getRandomInt(1)){
+            case 0:
+                explosionSound1.play();
+                break;
+            case 1:
+                explosionSound2.play();
+                break;
+            case 2:
+                explosionSound3.play();
+                break;
+        }
     }
     
-    return [player, projectiles, enemies];
+    return [player, projectiles, enemies, score];
 }
 function checkBuffsCollision(player, buffs) {
     var buffsInstances = [];
@@ -670,24 +802,28 @@ function checkBuffsCollision(player, buffs) {
                 if (player.hp > 100) {
                     player.hp = 100;
                 }
+                healSound.play();
                 break;
             case "DMGBuff":
                 player.projDamage += 1;
                 if (player.projDamage > 3) {
                     player.projDamage = 3;
                 }
+                buffSound.play();
                 break;
             case "PROJBuff":
                 player.projCount += 1;
                 if (player.projCount > 3) {
                     player.projCount = 3;
                 }
+                buffSound.play();
                 break;
             case "FRBuff":
                 player.attackDelay -= 2;
                 if (player.attackDelay < 4) {
                     player.attackDelay = 4;
                 }
+                buffSound.play();
                 break;
         }
         buffs.splice(buffIndex,1);
@@ -706,7 +842,11 @@ function setColorShift(instance, color){
         }
     }
 }
-function updateHUD(canvas, FPS, player, difficulty, enemies) {
+function updateHUD(canvas, FPS, player, difficulty, enemies, score) {
+    // Score 
+    mainCanvas.context.font = "14px Lucida Console";
+    mainCanvas.context.fillStyle = "darkorange";
+    mainCanvas.context.fillText("SCORE:" + score, 5, canvas.height-5);
     // Game Over message
     if(player.hp <=0) {
         mainCanvas.context.fillStyle = "red";
@@ -715,13 +855,14 @@ function updateHUD(canvas, FPS, player, difficulty, enemies) {
         mainCanvas.context.fillStyle = "yellow";
         mainCanvas.context.font = "12px Lucida Console";
         mainCanvas.context.fillText("refresh to try again", canvas.width/2-73, canvas.height/2+30);
+        defeatSound.play();
     } else if (difficulty > 4 && enemies.length == 0) {
         mainCanvas.context.fillStyle = "green";
         mainCanvas.context.font = "32px Lucida Console";
         mainCanvas.context.fillText("VICTORY", canvas.width/2-67, canvas.height/2);
         mainCanvas.context.fillStyle = "yellow";
         mainCanvas.context.font = "12px Lucida Console";
-        mainCanvas.context.fillText("refresh to play again", canvas.width/2-73, canvas.height/2+30);
+        mainCanvas.context.fillText("refresh to play again", canvas.width/2-75, canvas.height/2+30);
     } else {
         // Player HP Counter
         switch (Math.ceil(player.hp/25)) {
@@ -746,25 +887,6 @@ function updateHUD(canvas, FPS, player, difficulty, enemies) {
             mainCanvas.context.fillStyle = "cyan";
             mainCanvas.context.font = "14 px Lucida Console";
             mainCanvas.context.fillText("BOSS HP:"  + enemies[0].hp, 5, 30);
-        }
-        // DMG Counter
-        mainCanvas.context.fillStyle = "deeppink";
-        mainCanvas.context.fillText("DMG:" + player.projDamage, 5, canvas.height-35);
-        // PROJ Counter
-        mainCanvas.context.fillStyle = "chartreuse";
-        mainCanvas.context.fillText("PROJ:" + player.projCount, 5, canvas.height-20);
-        // FR Counter
-        mainCanvas.context.fillStyle = "darkorange";
-        switch (player.attackDelay) {
-            case 10:
-                mainCanvas.context.fillText("FR:" + 1, 5, canvas.height-5);
-                break;
-            case 8:
-                mainCanvas.context.fillText("FR:" + 2, 5, canvas.height-5);
-                break;
-            case 6:
-                mainCanvas.context.fillText("FR:" + 3, 5, canvas.height-5);
-                break;
         }
         // Current wave
         if (difficulty < 4) {
